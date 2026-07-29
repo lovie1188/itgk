@@ -821,6 +821,7 @@ class CertificateController extends BaseController
         $receiverDesig = trim((string)($input['receiver_designation'] ?? ''));
         $receiverMob   = trim((string)($input['receiver_mobile']      ?? ''));
         $receiverEmail = trim((string)($input['receiver_email']       ?? ''));
+        $_SESSION['last_receiver_email'] = $receiverEmail;
         $issuerName    = trim((string)($input['issuer_name']          ?? ''));
         $issuerDesig   = trim((string)($input['issuer_designation']   ?? ''));
         $issuerMobile  = trim((string)($input['issuer_mobile']        ?? ''));
@@ -1487,6 +1488,204 @@ class CertificateController extends BaseController
             'txnId'        => $txnId,
             'title'        => 'Certificate Issue Acknowledgement - SoftSam Portal',
         ]);
+    }
+
+    public function sendAckEmail(): void
+    {
+        header('Content-Type: application/json');
+
+        // Verify CSRF
+        if (!$this->verifyCsrf()) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => 'CSRF validation failed. Please reload the page.']);
+            return;
+        }
+
+        // Parse JSON input
+        $input = json_decode(file_get_contents('php://input'), true) ?: [];
+        $certIdsRaw = $input['cert_ids'] ?? [];
+        $txnId = trim((string)($input['txn_id'] ?? ''));
+
+        $certIds = [];
+        foreach ((array)$certIdsRaw as $id) {
+            $clean = (int)preg_replace('/^certificate\s*/i', '', (string)$id);
+            if ($clean > 0) $certIds[] = $clean;
+        }
+
+        if (empty($certIds)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'No certificate IDs provided.']);
+            return;
+        }
+
+        try {
+            $sheetService  = new \App\Services\GoogleSheetService();
+            $sheetId       = $sheetService->getCertificateSheetId();
+            $sheetRange    = $sheetService->getCertificateRange();
+            $sheetData     = $sheetService->fetchParsedSheet($sheetId, $sheetRange);
+            $rawRows       = $sheetData['rows'] ?? [];
+            $sheetStartRow = (int)($sheetData['startRow'] ?? 1);
+
+            $certs = [];
+            foreach ($rawRows as $idx => $r) {
+                $rowId = (string)($r['S. No.'] ?? ($idx + 1));
+                $rowNumericId = (int)preg_replace('/^certificate\s*/i', '', $rowId);
+                
+                if (in_array($rowNumericId, $certIds, true)) {
+                    $certs[] = [
+                        'id'           => $rowId,
+                        'course_name'  => $r['Course Name']  ?? '',
+                        'receiving_date' => $r['DATE']         ?? $r['Receiving Date'] ?? '',
+                        'exam_name'    => $r['EXAM']         ?? $r['Exam Name']       ?? '',
+                        'itgk_code'    => $r['ITGK CODE']   ?? $r['ITGK Code']       ?? '',
+                        'district'     => $r['DISTRICT']    ?? $r['District']         ?? '',
+                        'pass'         => (int)($r['PASS']        ?? $r['Pass']       ?? 0),
+                        'grand_total'  => (int)($r['Grand Total'] ?? $r['grand_total'] ?? 0),
+                        'packet_no'    => $r['Packet No.']         ?? $r['Packet No'] ?? '',
+                        'cert_no_from' => $r['Certificate No. From'] ?? $r['Cert No From'] ?? '',
+                        'cert_no_to'   => $r['Certificate No. To']   ?? $r['Cert No To']   ?? '',
+                        'receiver_name' => $r['Receiver Name']       ?? '',
+                    ];
+                }
+            }
+
+            if (empty($certs)) {
+                http_response_code(404);
+                echo json_encode(['success' => false, 'message' => 'Certificates not found in Google Sheet.']);
+                return;
+            }
+
+            // Fetch ITGK email from ITGK Master
+            $firstItgk = trim((string)($certs[0]['itgk_code'] ?? ''));
+            $itgkEmail = null;
+            if ($firstItgk !== '') {
+                $itgkMasterId = $sheetService->getItgkMasterSheetId();
+                $itgkMasterRange = $sheetService->getItgkMasterRange();
+                $itgkMasterData = $sheetService->fetchParsedSheet($itgkMasterId, $itgkMasterRange);
+                $itgkRows = $itgkMasterData['rows'] ?? [];
+
+                foreach ($itgkRows as $itgkRow) {
+                    $code = strtolower(trim((string)($itgkRow['ITGK CODE'] ?? $itgkRow['ITGK Code'] ?? '')));
+                    if (strcasecmp($code, $firstItgk) === 0) {
+                        $itgkEmail = trim((string)($itgkRow['Email'] ?? $itgkRow['EMAIL'] ?? ''));
+                        break;
+                    }
+                }
+            }
+
+            // Collect emails for 4 stakeholders
+            $currentUser = AuthService::user();
+            $issuerEmail = $currentUser['email'] ?? null;
+            $receiverEmail = $_SESSION['last_receiver_email'] ?? $itgkEmail;
+
+            $recipients = array_unique(array_filter([
+                'softtechseva@gmail.com',
+                $receiverEmail,
+                $itgkEmail,
+                $issuerEmail
+            ], function ($email) {
+                return $email && filter_var($email, FILTER_VALIDATE_EMAIL);
+            }));
+
+            if (empty($recipients)) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'No valid stakeholder emails found.']);
+                return;
+            }
+
+            // Send emails using EmailService
+            $emailService = new \App\Services\EmailService();
+            $subject = "Acknowledgement Slip Receipt - SoftSam Portal - Txn: {$txnId}";
+            
+            // Build table rows
+            $tableRows = '';
+            foreach ($certs as $index => $c) {
+                $tableRows .= "
+                <tr>
+                    <td style='padding: 6px; border: 1px solid #ddd;'>" . ($index + 1) . "</td>
+                    <td style='padding: 6px; border: 1px solid #ddd;'>" . htmlspecialchars((string)$c['course_name']) . "</td>
+                    <td style='padding: 6px; border: 1px solid #ddd;'>" . htmlspecialchars((string)$c['exam_name']) . "</td>
+                    <td style='padding: 6px; border: 1px solid #ddd;'>" . htmlspecialchars((string)$c['packet_no']) . "</td>
+                    <td style='padding: 6px; border: 1px solid #ddd;'>" . htmlspecialchars((string)$c['cert_no_from']) . " - " . htmlspecialchars((string)$c['cert_no_to']) . "</td>
+                    <td style='padding: 6px; border: 1px solid #ddd; text-align: center;'>" . htmlspecialchars((string)$c['grand_total']) . "</td>
+                </tr>";
+            }
+
+            $emailBody = "
+            <!DOCTYPE html>
+            <html>
+            <body style='font-family: Arial, sans-serif; line-height: 1.5; color: #333;'>
+                <div style='max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 20px; border-radius: 8px;'>
+                    <div style='text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 12px; margin-bottom: 15px;'>
+                        <h2 style='color: #2563eb; margin: 0;'>SoftSam ITGK Certificate Portal</h2>
+                        <p style='margin: 4px 0 0 0; color: #64748b; font-size: 13px;'>Acknowledgement Receipt</p>
+                    </div>
+                    <p>Dear Representative / Stakeholder,</p>
+                    <p>An official receipt slip has been generated for your certificate issuance transaction. Details are provided below:</p>
+                    
+                    <div style='background: #f1f5f9; padding: 12px; border-radius: 6px; font-size: 13px; margin-bottom: 15px;'>
+                        <p style='margin: 0 0 4px 0;'><strong>Transaction ID:</strong> " . htmlspecialchars($txnId) . "</p>
+                        <p style='margin: 0 0 4px 0;'><strong>ITGK Code:</strong> " . htmlspecialchars($firstItgk) . "</p>
+                        <p style='margin: 0;'><strong>Date of Transaction:</strong> " . date('d-m-Y H:i:s') . "</p>
+                    </div>
+
+                    <table style='width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 12px;'>
+                        <thead>
+                            <tr style='background: #e2e8f0;'>
+                                <th style='padding: 6px; border: 1px solid #ddd; text-align: left;'>#</th>
+                                <th style='padding: 6px; border: 1px solid #ddd; text-align: left;'>Course</th>
+                                <th style='padding: 6px; border: 1px solid #ddd; text-align: left;'>Exam</th>
+                                <th style='padding: 6px; border: 1px solid #ddd; text-align: left;'>Packet No</th>
+                                <th style='padding: 6px; border: 1px solid #ddd; text-align: left;'>Certificate Nos</th>
+                                <th style='padding: 6px; border: 1px solid #ddd; text-align: center;'>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {$tableRows}
+                        </tbody>
+                    </table>
+
+                    <p style='font-size: 13px; color: #475569;'>This email serves as an automated receipt. Please verify with the portal or physically count the certificates upon receipt.</p>
+                    <hr style='border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;'>
+                    <p style='color: #64748b; font-size: 11px; text-align: center; margin: 0;'>Sent securely via SoftSam Certificate Management System</p>
+                </div>
+            </body>
+            </html>";
+
+            $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
+            $mail->isSMTP();
+            $settings = $emailService->getSettings();
+            $mail->Host = $settings['smtp_host'];
+            $mail->SMTPAuth = true;
+            $mail->Username = $settings['smtp_user'];
+            $mail->Password = $settings['smtp_pass'];
+            
+            $encryption = strtolower($settings['smtp_encryption']);
+            $mail->SMTPSecure = ($encryption === 'ssl') ? \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS : \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port = (int)$settings['smtp_port'];
+            $mail->SMTPOptions = [
+                'ssl' => [
+                    'verify_peer' => false,
+                    'verify_peer_name' => false,
+                    'allow_self_signed' => true
+                ]
+            ];
+            $mail->setFrom($settings['smtp_from_email'], $settings['smtp_from_name']);
+            
+            foreach ($recipients as $email) {
+                $mail->addAddress($email);
+            }
+
+            $mail->isHTML(true);
+            $mail->Subject = $subject;
+            $mail->Body = $emailBody;
+            $mail->send();
+
+            echo json_encode(['success' => true, 'message' => 'Acknowledgement email sent to 4 stakeholders successfully!']);
+        } catch (\Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Failed to send email: ' . $e->getMessage()]);
+        }
     }
 
     // =========================================================
