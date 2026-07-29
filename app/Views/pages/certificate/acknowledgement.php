@@ -162,9 +162,15 @@ $totalGrand  = array_sum(array_column($certs, 'grand_total'));
         /* ── Print ── */
         @media print {
             .action-bar { display: none !important; }
-            body { background: #fff; }
+            body {
+                background: #fff;
+                margin: 15mm 15mm 15mm 15mm;
+            }
+            @page {
+                margin: 0;
+            }
             .slip-wrapper { margin: 0; padding: 0; max-width: 100%; }
-            .slip { border: none; padding: 10px 14px; }
+            .slip { border: none; padding: 0; }
         }
     </style>
 </head>
