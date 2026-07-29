@@ -34,8 +34,8 @@ $totalGrand  = array_sum(array_column($certs, 'grand_total'));
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($title ?? 'Certificate Issue Acknowledgement') ?></title>
-    <link rel="stylesheet" href="<?= BASE_URL ?>assets/css/bootstrap.min.css">
-    <link rel="stylesheet" href="<?= BASE_URL ?>assets/css/all.min.css">
+    <link rel="stylesheet" href="<?= BASE_URL ?>assets/vendor/bootstrap-5.3.3/css/bootstrap.min.css">
+    <link rel="stylesheet" href="<?= BASE_URL ?>assets/vendor/fontawesome-6.0.0/css/all.min.css">
     <meta name="csrf-token" content="<?= \App\Helpers\Csrf::getToken() ?>">
     <style>
         /* ── Screen ── */
