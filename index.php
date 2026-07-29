@@ -94,6 +94,10 @@ $router->post('/auth/firebase-verify', 'App\\Controllers\\AuthController', 'fire
 $router->get('/itgk_certificate.php', 'App\\Controllers\\CertificateController', 'index');
 $router->get('/learner_result.php', 'App\\Controllers\\LearnerController', 'index');
 
+// Public Verification routes (no authentication required)
+$router->get('/verify/transaction', 'App\\Controllers\\CertificateController', 'verifyTransaction');
+$router->post('/verify/log', 'App\\Controllers\\CertificateController', 'logVerification');
+
 // Protected routes (authentication required)
 $router->group([
     'middleware' => ['App\\Middleware\\AuthMiddleware']

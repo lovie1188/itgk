@@ -1,8 +1,8 @@
 <?php
 // JS handles pagination -- only need total count and role check
-$total        = (int)($total ?? count($certificates ?? []));
+$total = (int) ($total ?? count($certificates ?? []));
 $isSuperAdmin = \App\Services\AuthService::isSuperAdmin();
-$canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issue
+$canIssue = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issue
 ?>
 
 <div class="row mb-1">
@@ -20,8 +20,8 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                 <button type="button" id="btnConsolidate" class="btn btn-warning btn-sm fw-bold">
                     <i class="fas fa-cogs me-1"></i>Consolidate Student Results
                 </button>
-                <button type="button" class="btn btn-success btn-sm fw-bold"
-                    data-bs-toggle="offcanvas" data-bs-target="#addItgkOffcanvas">
+                <button type="button" class="btn btn-success btn-sm fw-bold" data-bs-toggle="offcanvas"
+                    data-bs-target="#addItgkOffcanvas">
                     <i class="fas fa-plus-circle me-1"></i>Add Packet
                 </button>
             <?php endif; ?>
@@ -33,7 +33,8 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
 </div>
 
 <?php if (!empty($sheetError)): ?>
-    <div class="alert alert-danger py-1 small"><i class="fas fa-exclamation-triangle me-1"></i><?= htmlspecialchars($sheetError) ?></div>
+    <div class="alert alert-danger py-1 small"><i
+            class="fas fa-exclamation-triangle me-1"></i><?= htmlspecialchars($sheetError) ?></div>
 <?php endif; ?>
 
 <!-- Analytics Cards -->
@@ -84,15 +85,17 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
         <div class="d-flex justify-content-between align-items-center gap-1 flex-wrap">
             <h6 class="mb-0">
                 <i class="fas fa-list me-1"></i>
-                ITGK Certificates &mdash; <span id="certVisibleCount"><?= number_format($total) ?></span> / <?= number_format($total) ?> records
+                ITGK Certificates &mdash; <span id="certVisibleCount"><?= number_format($total) ?></span> /
+                <?= number_format($total) ?> records
             </h6>
             <div class="d-flex align-items-center gap-2">
-                <input type="search" id="certSearch"
-                    class="form-control form-control-sm"
+                <input type="search" id="certSearch" class="form-control form-control-sm"
                     placeholder="&#x1F50D; Search ITGK, Course, Exam, Status..."
                     style="width:230px;background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);color:#fff;"
                     autocomplete="off">
-                <select id="certPerPage" class="form-select form-select-sm" style="width:75px;background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);color:#fff;" title="Records per page">
+                <select id="certPerPage" class="form-select form-select-sm"
+                    style="width:75px;background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);color:#fff;"
+                    title="Records per page">
                     <option value="10" selected>10</option>
                     <option value="25">25</option>
                     <option value="50">50</option>
@@ -111,7 +114,8 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                     <thead>
                         <tr>
                             <th style="width:32px;">
-                                <input type="checkbox" id="chkSelectAll" class="form-check-input" title="Select all visible Available rows">
+                                <input type="checkbox" id="chkSelectAll" class="form-check-input"
+                                    title="Select all visible Available rows">
                             </th>
 
                             <th style="width:30px;"></th><!-- expand toggle -->
@@ -122,7 +126,8 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                             <th>P / F / A / Tot</th>
                             <th>Packet &amp; Cert Nos</th>
                             <th>Status</th>
-                            <?php if ($isSuperAdmin): ?><th class="text-end">Actions</th><?php endif; ?>
+                            <?php if ($isSuperAdmin): ?>
+                                <th class="text-end">Actions</th><?php endif; ?>
                         </tr>
                     </thead>
                     <tbody id="certTbody">
@@ -135,118 +140,119 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                         </tr>
                         <?php foreach ($certificates as $idx => $row): ?>
                             <?php
-                            $rowId  = htmlspecialchars((string)($row['id'] ?? ($idx + 1)));
-                            $status = strtoupper(trim((string)($row['status'] ?? 'AVAILABLE')));
+                            $rowId = htmlspecialchars((string) ($row['id'] ?? ($idx + 1)));
+                            $status = strtoupper(trim((string) ($row['status'] ?? 'AVAILABLE')));
                             $bgBadge = match (true) {
-                                str_contains($status, 'ISSUED')  => 'bg-info text-dark',
-                                str_contains($status, 'AVAIL')   => 'bg-success',
+                                str_contains($status, 'ISSUED') => 'bg-info text-dark',
+                                str_contains($status, 'AVAIL') => 'bg-success',
                                 str_contains($status, 'TRANSIT') => 'bg-warning text-dark',
-                                default                          => 'bg-secondary',
+                                default => 'bg-secondary',
                             };
                             ?>
                             <!-- Main row -->
-                            <tr class="cert-main-row" data-row="<?= $idx ?>" style="cursor:pointer;" title="Click to expand details">
+                            <tr class="cert-main-row" data-row="<?= $idx ?>" style="cursor:pointer;"
+                                title="Click to expand details">
                                 <!-- Checkbox for bulk selection (Available rows only) -->
                                 <td class="text-center" onclick="event.stopPropagation()" style="width:32px;">
                                     <?php if (str_contains($status, 'AVAIL')): ?>
-                                        <input type="checkbox"
-                                            class="form-check-input cert-select-chk"
-                                            data-sheet-row="<?= (int)($row['sheet_row'] ?? 0) ?>"
-                                            data-id="<?= $rowId ?>"
-                                            data-itgk="<?= htmlspecialchars((string)($row['itgk_code'] ?? '')) ?>"
-                                            data-district="<?= htmlspecialchars((string)($row['district'] ?? '')) ?>"
-                                            data-course="<?= htmlspecialchars((string)($row['course_name'] ?? '')) ?>"
-                                            data-exam="<?= htmlspecialchars((string)($row['exam_name'] ?? '')) ?>"
-                                            data-packet="<?= htmlspecialchars((string)($row['packet_no'] ?? '')) ?>"
-                                            data-total="<?= (int)($row['grand_total'] ?? 0) ?>"
-                                            title="Select for bulk issue">
+                                        <input type="checkbox" class="form-check-input cert-select-chk"
+                                            data-sheet-row="<?= (int) ($row['sheet_row'] ?? 0) ?>" data-id="<?= $rowId ?>"
+                                            data-itgk="<?= htmlspecialchars((string) ($row['itgk_code'] ?? '')) ?>"
+                                            data-district="<?= htmlspecialchars((string) ($row['district'] ?? '')) ?>"
+                                            data-course="<?= htmlspecialchars((string) ($row['course_name'] ?? '')) ?>"
+                                            data-exam="<?= htmlspecialchars((string) ($row['exam_name'] ?? '')) ?>"
+                                            data-packet="<?= htmlspecialchars((string) ($row['packet_no'] ?? '')) ?>"
+                                            data-total="<?= (int) ($row['grand_total'] ?? 0) ?>" title="Select for bulk issue">
                                     <?php endif; ?>
                                 </td>
 
                                 <td class="text-center">
-                                    <i class="fas fa-chevron-right expand-icon text-muted" style="font-size:10px;transition:transform .2s"></i>
+                                    <i class="fas fa-chevron-right expand-icon text-muted"
+                                        style="font-size:10px;transition:transform .2s"></i>
                                 </td>
                                 <td class="fw-bold text-muted"><?= $rowId ?></td>
                                 <td>
-                                    <div class="fw-bold text-primary"><?= htmlspecialchars((string)($row['course_name'] ?? '')) ?></div>
-                                    <div class="small text-muted"><?= htmlspecialchars((string)($row['receiving_date'] ?? '')) ?></div>
+                                    <div class="fw-bold text-primary">
+                                        <?= htmlspecialchars((string) ($row['course_name'] ?? '')) ?></div>
+                                    <div class="small text-muted">
+                                        <?= htmlspecialchars((string) ($row['receiving_date'] ?? '')) ?></div>
                                 </td>
-                                <td><?= htmlspecialchars((string)($row['exam_name'] ?? '')) ?></td>
+                                <td><?= htmlspecialchars((string) ($row['exam_name'] ?? '')) ?></td>
                                 <td>
-                                    <code><?= htmlspecialchars((string)($row['itgk_code'] ?? '')) ?></code>
+                                    <code><?= htmlspecialchars((string) ($row['itgk_code'] ?? '')) ?></code>
                                     <?php if (!empty($row['district'])): ?>
-                                        <div class="small text-muted"><i class="fas fa-map-marker-alt me-1"></i><?= htmlspecialchars((string)$row['district']) ?></div>
+                                        <div class="small text-muted"><i
+                                                class="fas fa-map-marker-alt me-1"></i><?= htmlspecialchars((string) $row['district']) ?>
+                                        </div>
                                     <?php endif; ?>
                                 </td>
                                 <td>
-                                    <span class="badge bg-success" title="Pass"><?= (int)($row['pass'] ?? 0) ?>P</span>
-                                    <span class="badge bg-danger" title="Fail"><?= (int)($row['fail'] ?? 0) ?>F</span>
-                                    <span class="badge bg-secondary" title="Absent"><?= (int)($row['absent'] ?? 0) ?>A</span>
-                                    <span class="badge bg-dark" title="Total">Tot:<?= (int)($row['grand_total'] ?? 0) ?></span>
+                                    <span class="badge bg-success" title="Pass"><?= (int) ($row['pass'] ?? 0) ?>P</span>
+                                    <span class="badge bg-danger" title="Fail"><?= (int) ($row['fail'] ?? 0) ?>F</span>
+                                    <span class="badge bg-secondary" title="Absent"><?= (int) ($row['absent'] ?? 0) ?>A</span>
+                                    <span class="badge bg-dark" title="Total">Tot:<?= (int) ($row['grand_total'] ?? 0) ?></span>
                                 </td>
                                 <td>
                                     <?php if (!empty($row['packet_no'])): ?>
-                                        <div><small>Pkt:</small> <code><?= htmlspecialchars((string)$row['packet_no']) ?></code></div>
+                                        <div><small>Pkt:</small> <code><?= htmlspecialchars((string) $row['packet_no']) ?></code>
+                                        </div>
                                     <?php endif; ?>
                                     <?php if (!empty($row['cert_no_from']) || !empty($row['cert_no_to'])): ?>
-                                        <div class="small text-muted"><?= htmlspecialchars((string)($row['cert_no_from'] ?? '')) ?> â€“ <?= htmlspecialchars((string)($row['cert_no_to'] ?? '')) ?></div>
+                                        <div class="small text-muted"><?= htmlspecialchars((string) ($row['cert_no_from'] ?? '')) ?>
+                                            to <?= htmlspecialchars((string) ($row['cert_no_to'] ?? '')) ?></div>
                                     <?php endif; ?>
                                 </td>
-                                <td><span class="badge <?= $bgBadge ?>"><?= htmlspecialchars((string)($row['status'] ?? 'Available')) ?></span></td>
+                                <td><span
+                                        class="badge <?= $bgBadge ?>"><?= htmlspecialchars((string) ($row['status'] ?? 'Available')) ?></span>
+                                </td>
                                 <?php if ($isSuperAdmin): ?>
                                     <td class="text-end">
                                         <!-- View Details -->
-                                        <button type="button"
-                                            class="btn btn-outline-secondary btn-sm py-0 px-2 btn-view-cert"
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 btn-view-cert"
                                             data-row="<?= $idx ?>" title="View Details">
                                             <i class="fas fa-eye"></i>
                                         </button>
                                         <!-- Edit -->
-                                        <button type="button"
-                                            class="btn btn-outline-primary btn-sm py-0 px-2 btn-edit-cert"
+                                        <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 btn-edit-cert"
                                             data-id="<?= $rowId ?>"
-                                            data-course="<?= htmlspecialchars((string)($row['course_name'] ?? '')) ?>"
-                                            data-exam="<?= htmlspecialchars((string)($row['exam_name'] ?? '')) ?>"
-                                            data-itgk="<?= htmlspecialchars((string)($row['itgk_code'] ?? '')) ?>"
-                                            data-district="<?= htmlspecialchars((string)($row['district'] ?? '')) ?>"
-                                            data-date="<?= htmlspecialchars((string)($row['receiving_date'] ?? '')) ?>"
-                                            data-examdate="<?= htmlspecialchars((string)($row['exam_date'] ?? '')) ?>"
-                                            data-pass="<?= (int)($row['pass'] ?? 0) ?>"
-                                            data-fail="<?= (int)($row['fail'] ?? 0) ?>"
-                                            data-absent="<?= (int)($row['absent'] ?? 0) ?>"
-                                            data-total="<?= (int)($row['grand_total'] ?? 0) ?>"
-                                            data-packet="<?= htmlspecialchars((string)($row['packet_no'] ?? '')) ?>"
-                                            data-certfrom="<?= htmlspecialchars((string)($row['cert_no_from'] ?? '')) ?>"
-                                            data-certto="<?= htmlspecialchars((string)($row['cert_no_to'] ?? '')) ?>"
-                                            data-status="<?= htmlspecialchars((string)($row['status'] ?? '')) ?>"
-                                            data-location="<?= htmlspecialchars((string)($row['current_location'] ?? '')) ?>"
-                                            data-remark="<?= htmlspecialchars((string)($row['remark'] ?? '')) ?>"
-                                            data-receiver="<?= htmlspecialchars((string)($row['receiver_name'] ?? '')) ?>"
-                                            data-desig="<?= htmlspecialchars((string)($row['receiver_designation'] ?? '')) ?>"
-                                            data-mobile="<?= htmlspecialchars((string)($row['receiver_mobile'] ?? '')) ?>"
-                                            data-issuedby="<?= htmlspecialchars((string)($row['issued_by'] ?? '')) ?>"
-                                            data-image="<?= htmlspecialchars((string)($row['image'] ?? '')) ?>"
-                                            data-sheetrow="<?= (int)($row['sheet_row'] ?? 0) ?>"
-                                            data-bs-toggle="offcanvas" data-bs-target="#editCertOffcanvas"
-                                            title="Edit Record">
+                                            data-course="<?= htmlspecialchars((string) ($row['course_name'] ?? '')) ?>"
+                                            data-exam="<?= htmlspecialchars((string) ($row['exam_name'] ?? '')) ?>"
+                                            data-itgk="<?= htmlspecialchars((string) ($row['itgk_code'] ?? '')) ?>"
+                                            data-district="<?= htmlspecialchars((string) ($row['district'] ?? '')) ?>"
+                                            data-date="<?= htmlspecialchars((string) ($row['receiving_date'] ?? '')) ?>"
+                                            data-examdate="<?= htmlspecialchars((string) ($row['exam_date'] ?? '')) ?>"
+                                            data-pass="<?= (int) ($row['pass'] ?? 0) ?>" data-fail="<?= (int) ($row['fail'] ?? 0) ?>"
+                                            data-absent="<?= (int) ($row['absent'] ?? 0) ?>"
+                                            data-total="<?= (int) ($row['grand_total'] ?? 0) ?>"
+                                            data-packet="<?= htmlspecialchars((string) ($row['packet_no'] ?? '')) ?>"
+                                            data-certfrom="<?= htmlspecialchars((string) ($row['cert_no_from'] ?? '')) ?>"
+                                            data-certto="<?= htmlspecialchars((string) ($row['cert_no_to'] ?? '')) ?>"
+                                            data-status="<?= htmlspecialchars((string) ($row['status'] ?? '')) ?>"
+                                            data-location="<?= htmlspecialchars((string) ($row['current_location'] ?? '')) ?>"
+                                            data-remark="<?= htmlspecialchars((string) ($row['remark'] ?? '')) ?>"
+                                            data-receiver="<?= htmlspecialchars((string) ($row['receiver_name'] ?? '')) ?>"
+                                            data-desig="<?= htmlspecialchars((string) ($row['receiver_designation'] ?? '')) ?>"
+                                            data-mobile="<?= htmlspecialchars((string) ($row['receiver_mobile'] ?? '')) ?>"
+                                            data-issuedby="<?= htmlspecialchars((string) ($row['issued_by'] ?? '')) ?>"
+                                            data-image="<?= htmlspecialchars((string) ($row['image'] ?? '')) ?>"
+                                            data-sheetrow="<?= (int) ($row['sheet_row'] ?? 0) ?>" data-bs-toggle="offcanvas"
+                                            data-bs-target="#editCertOffcanvas" title="Edit Record">
                                             <i class="fas fa-edit"></i>
                                         </button>
                                         <!-- Issue -> Bulk Issue offcanvas -->
                                         <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 btn-quick-issue"
-                                            data-sheet-row="<?= (int)($row['sheet_row'] ?? 0) ?>"
-                                            data-id="<?= $rowId ?>"
-                                            data-itgk="<?= htmlspecialchars((string)($row['itgk_code'] ?? '')) ?>"
-                                            data-district="<?= htmlspecialchars((string)($row['district'] ?? '')) ?>"
-                                            data-course="<?= htmlspecialchars((string)($row['course_name'] ?? '')) ?>"
-                                            data-exam="<?= htmlspecialchars((string)($row['exam_name'] ?? '')) ?>"
-                                            data-packet="<?= htmlspecialchars((string)($row['packet_no'] ?? '')) ?>"
-                                            data-total="<?= (int)($row['grand_total'] ?? 0) ?>"
-                                            title="Issue Packet">
+                                            data-sheet-row="<?= (int) ($row['sheet_row'] ?? 0) ?>" data-id="<?= $rowId ?>"
+                                            data-itgk="<?= htmlspecialchars((string) ($row['itgk_code'] ?? '')) ?>"
+                                            data-district="<?= htmlspecialchars((string) ($row['district'] ?? '')) ?>"
+                                            data-course="<?= htmlspecialchars((string) ($row['course_name'] ?? '')) ?>"
+                                            data-exam="<?= htmlspecialchars((string) ($row['exam_name'] ?? '')) ?>"
+                                            data-packet="<?= htmlspecialchars((string) ($row['packet_no'] ?? '')) ?>"
+                                            data-total="<?= (int) ($row['grand_total'] ?? 0) ?>" title="Issue Packet">
                                             <i class="fas fa-hand-holding-heart"></i>
                                         </button>
                                         <?php if (str_contains($status, 'ISSUED')): ?>
-                                            <a href="<?= BASE_URL ?>itgk/acknowledgement?id=<?= urlencode($rowId) ?>"
-                                                target="_blank" class="btn btn-outline-info btn-sm py-0 px-2" title="Print Receipt">
+                                            <a href="<?= BASE_URL ?>itgk/acknowledgement?id=<?= urlencode($rowId) ?>" target="_blank"
+                                                class="btn btn-outline-info btn-sm py-0 px-2" title="Print Receipt">
                                                 <i class="fas fa-print"></i>
                                             </a>
                                         <?php endif; ?>
@@ -260,21 +266,24 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                                         <div class="row g-2 small">
                                             <div class="col-md-3">
                                                 <strong>Current Location:</strong><br>
-                                                <?= htmlspecialchars((string)($row['current_location'] ?? 'N/A')) ?>
+                                                <?= htmlspecialchars((string) ($row['current_location'] ?? 'N/A')) ?>
                                             </div>
                                             <div class="col-md-3">
                                                 <strong>Exam Date:</strong><br>
-                                                <?= htmlspecialchars((string)($row['exam_date'] ?? '-')) ?>
+                                                <?= htmlspecialchars((string) ($row['exam_date'] ?? '-')) ?>
                                             </div>
                                             <div class="col-md-3">
                                                 <strong>Receiver Info:</strong><br>
                                                 <?php if (!empty($row['receiver_name'])): ?>
-                                                    <i class="fas fa-user me-1"></i><?= htmlspecialchars((string)$row['receiver_name']) ?>
+                                                    <i
+                                                        class="fas fa-user me-1"></i><?= htmlspecialchars((string) $row['receiver_name']) ?>
                                                     <?php if (!empty($row['receiver_designation'])): ?>
-                                                        <br><span class="text-muted"><?= htmlspecialchars((string)$row['receiver_designation']) ?></span>
+                                                        <br><span
+                                                            class="text-muted"><?= htmlspecialchars((string) $row['receiver_designation']) ?></span>
                                                     <?php endif; ?>
                                                     <?php if (!empty($row['receiver_mobile'])): ?>
-                                                        <br><i class="fas fa-phone me-1"></i><?= htmlspecialchars((string)$row['receiver_mobile']) ?>
+                                                        <br><i
+                                                            class="fas fa-phone me-1"></i><?= htmlspecialchars((string) $row['receiver_mobile']) ?>
                                                     <?php endif; ?>
                                                 <?php else: ?>
                                                     <span class="text-muted">Not yet issued</span>
@@ -282,7 +291,7 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                                             </div>
                                             <div class="col-md-3">
                                                 <strong>Remark:</strong><br>
-                                                <?= htmlspecialchars((string)($row['remark'] ?? '-')) ?>
+                                                <?= htmlspecialchars((string) ($row['remark'] ?? '-')) ?>
                                             </div>
                                         </div>
                                     </div>
@@ -304,8 +313,7 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
 
 
 <!-- Floating Bulk-Selection Action Bar (appears when rows are checked) -->
-<div id="bulkActionBar"
-    style="display:none;position:sticky;bottom:16px;z-index:1040;
+<div id="bulkActionBar" style="display:none;position:sticky;bottom:16px;z-index:1040;
             background:linear-gradient(135deg,#1a56db,#0e9f6e);
             color:#fff;border-radius:10px;padding:8px 16px;
             box-shadow:0 4px 20px rgba(0,0,0,.35);
@@ -320,8 +328,8 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
         <button type="button" class="btn btn-light btn-sm fw-bold" id="btnClearSel">
             <i class="fas fa-times me-1"></i>Clear
         </button>
-        <button type="button" class="btn btn-warning btn-sm fw-bold" id="btnOpenBulkIssue"
-            data-bs-toggle="offcanvas" data-bs-target="#bulkIssueOffcanvas">
+        <button type="button" class="btn btn-warning btn-sm fw-bold" id="btnOpenBulkIssue" data-bs-toggle="offcanvas"
+            data-bs-target="#bulkIssueOffcanvas">
             <i class="fas fa-paper-plane me-1"></i>Bulk Issue Selected
         </button>
     </div>
@@ -338,8 +346,8 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
 <!-- BULK ISSUE OFFCANVAS FORM                                     -->
 <!-- ============================================================ -->
 
-<div class="offcanvas offcanvas-end" tabindex="-1" id="bulkIssueOffcanvas"
-    aria-labelledby="bulkIssueOffcanvasLabel" style="width:520px;">
+<div class="offcanvas offcanvas-end" tabindex="-1" id="bulkIssueOffcanvas" aria-labelledby="bulkIssueOffcanvasLabel"
+    style="width:520px;">
     <div class="offcanvas-header py-2 px-3 text-white" style="background:linear-gradient(135deg,#1a56db,#0e9f6e);">
         <h6 class="offcanvas-title fw-bold mb-0" id="bulkIssueOffcanvasLabel">
             <i class="fas fa-paper-plane me-1"></i>Bulk Issue Certificates
@@ -412,9 +420,10 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
             </div>
             <div class="row g-1 mb-2">
                 <div class="col-12">
-                    <label class="form-label fw-semibold small mb-0">Receiver Name <span class="text-danger">*</span></label>
-                    <input type="text" name="receiver_name" id="bi_receiver_name"
-                        class="form-control form-control-sm" placeholder="e.g. Ramesh Kumar" required>
+                    <label class="form-label fw-semibold small mb-0">Receiver Name <span
+                            class="text-danger">*</span></label>
+                    <input type="text" name="receiver_name" id="bi_receiver_name" class="form-control form-control-sm"
+                        placeholder="e.g. Ramesh Kumar" required>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold small mb-0">Designation</label>
@@ -423,11 +432,12 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold small mb-0">Mobile</label>
-                    <input type="text" name="receiver_mobile" id="bi_receiver_mob"
-                        class="form-control form-control-sm" placeholder="98XXXXXXXX">
+                    <input type="text" name="receiver_mobile" id="bi_receiver_mob" class="form-control form-control-sm"
+                        placeholder="98XXXXXXXX">
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-semibold small mb-0">Email <span class="text-muted small">(Optional)</span></label>
+                    <label class="form-label fw-semibold small mb-0">Email <span
+                            class="text-muted small">(Optional)</span></label>
                     <input type="email" name="receiver_email" id="bi_receiver_email"
                         class="form-control form-control-sm" placeholder="itgk@example.com">
                 </div>
@@ -440,8 +450,7 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
             <div class="row g-1 mb-2">
                 <div class="col-md-6">
                     <label class="form-label fw-semibold small mb-0">Issuer Name</label>
-                    <input type="text" name="issuer_name" id="bi_issuer_name"
-                        class="form-control form-control-sm"
+                    <input type="text" name="issuer_name" id="bi_issuer_name" class="form-control form-control-sm"
                         value="<?= htmlspecialchars(\App\Services\AuthService::user()['name'] ?? '') ?>"
                         placeholder="Your Name">
                 </div>
@@ -454,9 +463,8 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold small mb-0">Issuer Mobile</label>
-                    <input type="text" name="issuer_mobile" id="bi_issuer_mobile"
-                        class="form-control form-control-sm"
-                        value="<?= htmlspecialchars((string)(\App\Services\AuthService::user()['mobile'] ?? '')) ?>"
+                    <input type="text" name="issuer_mobile" id="bi_issuer_mobile" class="form-control form-control-sm"
+                        value="<?= htmlspecialchars((string) (\App\Services\AuthService::user()['mobile'] ?? '')) ?>"
                         placeholder="Mobile Number">
                 </div>
             </div>
@@ -491,29 +499,38 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
             <?= \App\Helpers\Csrf::fieldHtml() ?>
             <div class="row g-1.5">
                 <div class="col-md-6 mb-1">
-                    <label class="form-label fw-semibold small mb-0">Course Name <span class="text-danger">*</span></label>
+                    <label class="form-label fw-semibold small mb-0">Course Name <span
+                            class="text-danger">*</span></label>
                     <input name="course_name" class="form-control form-control-sm" placeholder="e.g. RSCIT" required>
                 </div>
                 <div class="col-md-6 mb-1">
-                    <label class="form-label fw-semibold small mb-0">Receiving Date <span class="text-danger">*</span></label>
-                    <input type="date" name="receiving_date" class="form-control form-control-sm" value="<?= date('Y-m-d') ?>" required>
+                    <label class="form-label fw-semibold small mb-0">Receiving Date <span
+                            class="text-danger">*</span></label>
+                    <input type="date" name="receiving_date" class="form-control form-control-sm"
+                        value="<?= date('Y-m-d') ?>" required>
                 </div>
                 <div class="col-md-6 mb-1">
-                    <label class="form-label fw-semibold small mb-0">Exam Name <span class="text-danger">*</span></label>
-                    <input name="exam_name" class="form-control form-control-sm" placeholder="e.g. General Exam 2026" required>
+                    <label class="form-label fw-semibold small mb-0">Exam Name <span
+                            class="text-danger">*</span></label>
+                    <input name="exam_name" class="form-control form-control-sm" placeholder="e.g. General Exam 2026"
+                        required>
                 </div>
                 <div class="col-md-6 mb-1">
                     <label class="form-label fw-semibold small mb-0">Exam Date</label>
-                    <input type="date" name="exam_date" class="form-control form-control-sm" value="<?= date('Y-m-d') ?>">
+                    <input type="date" name="exam_date" class="form-control form-control-sm"
+                        value="<?= date('Y-m-d') ?>">
                 </div>
                 <div class="col-md-4 mb-1">
-                    <label class="form-label fw-semibold small mb-0">ITGK Code <span class="text-danger">*</span></label>
+                    <label class="form-label fw-semibold small mb-0">ITGK Code <span
+                            class="text-danger">*</span></label>
                     <select name="itgk_code" id="add_itgk_code_select" class="form-select form-select-sm" required>
                         <option value="">-- Select ITGK --</option>
                         <?php if (!empty($itgkList)): ?>
                             <?php foreach ($itgkList as $itgk): ?>
-                                <option value="<?= htmlspecialchars((string)$itgk['code']) ?>" data-district="<?= htmlspecialchars((string)$itgk['district']) ?>">
-                                    <?= htmlspecialchars((string)$itgk['code']) ?> - <?= htmlspecialchars((string)$itgk['name']) ?>
+                                <option value="<?= htmlspecialchars((string) $itgk['code']) ?>"
+                                    data-district="<?= htmlspecialchars((string) $itgk['district']) ?>">
+                                    <?= htmlspecialchars((string) $itgk['code']) ?> -
+                                    <?= htmlspecialchars((string) $itgk['name']) ?>
                                 </option>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -521,7 +538,8 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                 </div>
                 <div class="col-md-4 mb-1">
                     <label class="form-label fw-semibold small mb-0">District</label>
-                    <input name="district" id="add_district_input" class="form-control form-control-sm" placeholder="District name">
+                    <input name="district" id="add_district_input" class="form-control form-control-sm"
+                        placeholder="District name">
                 </div>
                 <div class="col-md-4 mb-1">
                     <label class="form-label fw-semibold small mb-0">Packet No</label>
@@ -529,19 +547,23 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                 </div>
                 <div class="col-3 mb-1">
                     <label class="form-label fw-semibold small mb-0">Pass</label>
-                    <input type="number" name="pass" class="form-control form-control-sm" placeholder="0" min="0" value="0">
+                    <input type="number" name="pass" class="form-control form-control-sm" placeholder="0" min="0"
+                        value="0">
                 </div>
                 <div class="col-3 mb-1">
                     <label class="form-label fw-semibold small mb-0">Fail</label>
-                    <input type="number" name="fail" class="form-control form-control-sm" placeholder="0" min="0" value="0">
+                    <input type="number" name="fail" class="form-control form-control-sm" placeholder="0" min="0"
+                        value="0">
                 </div>
                 <div class="col-3 mb-1">
                     <label class="form-label fw-semibold small mb-0">Absent</label>
-                    <input type="number" name="absent" class="form-control form-control-sm" placeholder="0" min="0" value="0">
+                    <input type="number" name="absent" class="form-control form-control-sm" placeholder="0" min="0"
+                        value="0">
                 </div>
                 <div class="col-3 mb-1">
                     <label class="form-label fw-semibold small mb-0">UFM</label>
-                    <input type="number" name="ufm" class="form-control form-control-sm" placeholder="0" min="0" value="0">
+                    <input type="number" name="ufm" class="form-control form-control-sm" placeholder="0" min="0"
+                        value="0">
                 </div>
                 <div class="col-md-4 mb-1">
                     <label class="form-label fw-semibold small mb-0">Cert No From</label>
@@ -553,7 +575,8 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                 </div>
                 <div class="col-md-4 mb-1">
                     <label class="form-label fw-semibold small mb-0">Grand Total</label>
-                    <input type="number" name="grand_total" class="form-control form-control-sm" placeholder="0" min="0" value="0">
+                    <input type="number" name="grand_total" class="form-control form-control-sm" placeholder="0" min="0"
+                        value="0">
                 </div>
                 <div class="col-md-6 mb-1">
                     <label class="form-label fw-semibold small mb-0">Current Location</label>
@@ -583,7 +606,8 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
 <!-- ============================================================ -->
 <!-- EDIT CERTIFICATE RECORD -- OFFCANVAS FORM (Saves to GSheet)   -->
 <!-- ============================================================ -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="editCertOffcanvas" aria-labelledby="editCertOffcanvasLabel" style="width:440px">
+<div class="offcanvas offcanvas-end" tabindex="-1" id="editCertOffcanvas" aria-labelledby="editCertOffcanvasLabel"
+    style="width:440px">
     <div class="offcanvas-header bg-warning text-dark py-2 px-3">
         <h6 class="offcanvas-title fw-bold mb-0" id="editCertOffcanvasLabel">
             <i class="fas fa-edit me-1"></i>Edit Certificate Record
@@ -597,27 +621,33 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
             <div class="row g-1.5">
                 <div class="col-12 mb-1">
                     <label class="form-label fw-semibold small mb-0">Course Name</label>
-                    <input type="text" name="course_name" id="ec_course" class="form-control form-control-sm" placeholder="Course Name">
+                    <input type="text" name="course_name" id="ec_course" class="form-control form-control-sm"
+                        placeholder="Course Name">
                 </div>
                 <div class="col-md-6 mb-1">
                     <label class="form-label fw-semibold small mb-0">Exam Name</label>
-                    <input type="text" name="exam_name" id="ec_exam" class="form-control form-control-sm" placeholder="Exam Name">
+                    <input type="text" name="exam_name" id="ec_exam" class="form-control form-control-sm"
+                        placeholder="Exam Name">
                 </div>
                 <div class="col-md-6 mb-1">
                     <label class="form-label fw-semibold small mb-0">ITGK Code</label>
-                    <input type="text" name="itgk_code" id="ec_itgk" class="form-control form-control-sm" placeholder="ITGK Code">
+                    <input type="text" name="itgk_code" id="ec_itgk" class="form-control form-control-sm"
+                        placeholder="ITGK Code">
                 </div>
                 <div class="col-md-6 mb-1">
                     <label class="form-label fw-semibold small mb-0">District</label>
-                    <input type="text" name="district" id="ec_district" class="form-control form-control-sm" placeholder="District">
+                    <input type="text" name="district" id="ec_district" class="form-control form-control-sm"
+                        placeholder="District">
                 </div>
                 <div class="col-md-6 mb-1">
                     <label class="form-label fw-semibold small mb-0">Receiving Date</label>
-                    <input type="text" name="receiving_date" id="ec_date" class="form-control form-control-sm" placeholder="YYYY-MM-DD">
+                    <input type="text" name="receiving_date" id="ec_date" class="form-control form-control-sm"
+                        placeholder="YYYY-MM-DD">
                 </div>
                 <div class="col-md-6 mb-1">
                     <label class="form-label fw-semibold small mb-0">Exam Date</label>
-                    <input type="text" name="exam_date" id="ec_examdate" class="form-control form-control-sm" placeholder="YYYY-MM-DD">
+                    <input type="text" name="exam_date" id="ec_examdate" class="form-control form-control-sm"
+                        placeholder="YYYY-MM-DD">
                 </div>
                 <div class="col-4 mb-1">
                     <label class="form-label fw-semibold small mb-0">Pass</label>
@@ -637,22 +667,25 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                 </div>
                 <div class="col-md-6 mb-1">
                     <label class="form-label fw-semibold small mb-0">Packet No.</label>
-                    <input type="text" name="packet_no" id="ec_packet" class="form-control form-control-sm" placeholder="Packet No.">
+                    <input type="text" name="packet_no" id="ec_packet" class="form-control form-control-sm"
+                        placeholder="Packet No.">
                 </div>
                 <div class="col-md-6 mb-1">
                     <label class="form-label fw-semibold small mb-0">Cert No. From</label>
-                    <input type="text" name="cert_no_from" id="ec_certfrom" class="form-control form-control-sm" placeholder="From">
+                    <input type="text" name="cert_no_from" id="ec_certfrom" class="form-control form-control-sm"
+                        placeholder="From">
                 </div>
                 <div class="col-md-6 mb-1">
                     <label class="form-label fw-semibold small mb-0">Cert No. To</label>
-                    <input type="text" name="cert_no_to" id="ec_certto" class="form-control form-control-sm" placeholder="To">
+                    <input type="text" name="cert_no_to" id="ec_certto" class="form-control form-control-sm"
+                        placeholder="To">
                 </div>
                 <div class="col-md-6 mb-1">
                     <label class="form-label fw-semibold small mb-0">Status</label>
                     <select name="status" id="ec_status" class="form-select form-select-sm">
                         <option value="">-- Select --</option>
                         <?php foreach ($statusOptions ?? ['Available', 'Issued', 'Not Received', 'InTransit'] as $status): ?>
-                        <option value="<?= htmlspecialchars($status) ?>"><?= htmlspecialchars($status) ?></option>
+                            <option value="<?= htmlspecialchars($status) ?>"><?= htmlspecialchars($status) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -661,33 +694,39 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                     <select name="current_location" id="ec_location" class="form-select form-select-sm">
                         <option value="">-- Select Location --</option>
                         <?php foreach ($locationOptions ?? [] as $loc): ?>
-                        <option value="<?= htmlspecialchars($loc) ?>"><?= htmlspecialchars($loc) ?></option>
+                            <option value="<?= htmlspecialchars($loc) ?>"><?= htmlspecialchars($loc) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="col-12 mb-1">
                     <label class="form-label fw-semibold small mb-0">Remark</label>
-                    <textarea name="remark" id="ec_remark" class="form-control form-control-sm" rows="2" placeholder="Remark"></textarea>
+                    <textarea name="remark" id="ec_remark" class="form-control form-control-sm" rows="2"
+                        placeholder="Remark"></textarea>
                 </div>
                 <div class="col-12 mb-1">
                     <label class="form-label fw-semibold small mb-0">Receiver Name</label>
-                    <input type="text" name="receiver_name" id="ec_receiver" class="form-control form-control-sm" placeholder="Receiver Name">
+                    <input type="text" name="receiver_name" id="ec_receiver" class="form-control form-control-sm"
+                        placeholder="Receiver Name">
                 </div>
                 <div class="col-md-6 mb-1">
                     <label class="form-label fw-semibold small mb-0">Designation</label>
-                    <input type="text" name="receiver_designation" id="ec_desig" class="form-control form-control-sm" placeholder="Designation">
+                    <input type="text" name="receiver_designation" id="ec_desig" class="form-control form-control-sm"
+                        placeholder="Designation">
                 </div>
                 <div class="col-md-6 mb-1">
                     <label class="form-label fw-semibold small mb-0">Mobile</label>
-                    <input type="text" name="receiver_mobile" id="ec_mobile" class="form-control form-control-sm" placeholder="Mobile Number">
+                    <input type="text" name="receiver_mobile" id="ec_mobile" class="form-control form-control-sm"
+                        placeholder="Mobile Number">
                 </div>
                 <div class="col-12 mb-1">
                     <label class="form-label fw-semibold small mb-0">Issued By</label>
-                    <input type="text" name="issued_by" id="ec_issuedby" class="form-control form-control-sm" placeholder="Issued By" readonly>
+                    <input type="text" name="issued_by" id="ec_issuedby" class="form-control form-control-sm"
+                        placeholder="Issued By" readonly>
                 </div>
                 <div class="col-12 mb-1">
                     <label class="form-label fw-semibold small mb-0">Image / Photo URL</label>
-                    <input type="text" name="image" id="ec_image" class="form-control form-control-sm" placeholder="Image URL">
+                    <input type="text" name="image" id="ec_image" class="form-control form-control-sm"
+                        placeholder="Image URL">
                 </div>
                 <div class="col-12 mt-2">
                     <button type="submit" class="btn btn-warning btn-sm py-1 w-100 fw-bold" id="btnEditCertSubmit">
@@ -775,7 +814,7 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
             const filteredSet = new Set(filtered);
 
             // Show/hide rows
-            allMainRows.forEach(function(row) {
+            allMainRows.forEach(function (row) {
                 const detail = detailOf(row);
                 if (!filteredSet.has(row)) {
                     row.style.display = 'none';
@@ -863,8 +902,8 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
             nav.innerHTML = html;
 
             // Attach click events
-            nav.querySelectorAll('.cert-pg-btn').forEach(function(a) {
-                a.addEventListener('click', function(e) {
+            nav.querySelectorAll('.cert-pg-btn').forEach(function (a) {
+                a.addEventListener('click', function (e) {
                     e.preventDefault();
                     var p = parseInt(this.dataset.p, 10);
                     if (!isNaN(p) && p >= 1 && p <= totalPages) {
@@ -889,18 +928,18 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
         var searchEl = document.getElementById('certSearch');
         if (searchEl) {
             var searchTimer;
-            searchEl.addEventListener('input', function() {
+            searchEl.addEventListener('input', function () {
                 clearTimeout(searchTimer);
                 var q = this.value;
-                searchTimer = setTimeout(function() {
+                searchTimer = setTimeout(function () {
                     applySearch(q);
                 }, 180);
             });
-            searchEl.addEventListener('search', function() {
+            searchEl.addEventListener('search', function () {
                 applySearch(this.value);
             });
             // Placeholder color tweak
-            searchEl.addEventListener('focus', function() {
+            searchEl.addEventListener('focus', function () {
                 this.style.color = '#fff';
             });
         }
@@ -908,7 +947,7 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
         // ----- Wire up per-page select -----------------------------------
         var perPageEl = document.getElementById('certPerPage');
         if (perPageEl) {
-            perPageEl.addEventListener('change', function() {
+            perPageEl.addEventListener('change', function () {
                 perPage = parseInt(this.value, 10);
                 curPage = 1;
                 render();
@@ -923,8 +962,8 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Expandable Rows -- click anywhere on main row (except buttons)
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    document.querySelectorAll('.cert-main-row').forEach(function(row) {
-        row.addEventListener('click', function(e) {
+    document.querySelectorAll('.cert-main-row').forEach(function (row) {
+        row.addEventListener('click', function (e) {
             if (e.target.closest('button') || e.target.closest('a')) return;
             const idx = this.getAttribute('data-row');
             const detail = document.querySelector('.cert-detail-row[data-row="' + idx + '"]');
@@ -937,8 +976,8 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
     });
 
     // View Details button (expand same row)
-    document.querySelectorAll('.btn-view-cert').forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
+    document.querySelectorAll('.btn-view-cert').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
             e.stopPropagation();
             const idx = this.getAttribute('data-row');
             const detail = document.querySelector('.cert-detail-row[data-row="' + idx + '"]');
@@ -953,7 +992,7 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Consolidate Button
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    document.getElementById('btnConsolidate')?.addEventListener('click', async function() {
+    document.getElementById('btnConsolidate')?.addEventListener('click', async function () {
         if (!confirm('à¤¯à¤¹ Student Results à¤•à¥‹ Certificate Packets à¤®à¥‡à¤‚ group à¤•à¤°à¥‡à¤--à¤¾à¥¤ Continue?')) return;
         const btn = this;
         btn.disabled = true;
@@ -987,7 +1026,7 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Add ITGK Form
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    document.getElementById('addItgkForm')?.addEventListener('submit', async function(e) {
+    document.getElementById('addItgkForm')?.addEventListener('submit', async function (e) {
         e.preventDefault();
         const btn = document.getElementById('btnAddItgkSubmit');
         if (btn) {
@@ -1023,7 +1062,7 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
     });
 
     // ITGK Code Dropdown Change Auto-fill District
-    document.getElementById('add_itgk_code_select')?.addEventListener('change', function() {
+    document.getElementById('add_itgk_code_select')?.addEventListener('change', function () {
         const selectedOption = this.options[this.selectedIndex];
         const district = selectedOption.getAttribute('data-district') || '';
         const districtInput = document.getElementById('add_district_input');
@@ -1035,8 +1074,8 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Edit Certificate -- populate form fields from data-* attributes
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    document.querySelectorAll('.btn-edit-cert').forEach(function(btn) {
-        btn.addEventListener('click', function() {
+    document.querySelectorAll('.btn-edit-cert').forEach(function (btn) {
+        btn.addEventListener('click', function () {
             const set = (id, val) => {
                 const el = document.getElementById(id);
                 if (el) el.value = val || '';
@@ -1085,7 +1124,7 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
     });
 
     // Edit Certificate Form Submit -- saves to Google Sheet via API
-    document.getElementById('editCertForm')?.addEventListener('submit', async function(e) {
+    document.getElementById('editCertForm')?.addEventListener('submit', async function (e) {
         e.preventDefault();
         const btn = document.getElementById('btnEditCertSubmit');
         if (btn) {
@@ -1127,22 +1166,24 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
 
 
     // Issue Packet Form Submit
-        // Quick Issue Button: single row click -> clears selection, selects that row, opens bulk offcanvas
-    document.addEventListener('click', function(e) {
+    // Quick Issue Button: single row click -> clears selection, selects that row, opens bulk offcanvas
+    document.addEventListener('click', function (e) {
         var btn = e.target.closest('.btn-quick-issue');
         if (!btn) return;
         var sheetRow = parseInt(btn.dataset.sheetRow, 10);
         if (!sheetRow) { alert('Sheet row not found.'); return; }
-        document.dispatchEvent(new CustomEvent('quickIssue', { detail: {
-            sheetRow: sheetRow,
-            id:       btn.dataset.id       || '',
-            itgk:     btn.dataset.itgk     || '',
-            district: btn.dataset.district || '',
-            course:   btn.dataset.course   || '',
-            exam:     btn.dataset.exam     || '',
-            packet:   btn.dataset.packet   || '',
-            total:    btn.dataset.total    || ''
-        }}));
+        document.dispatchEvent(new CustomEvent('quickIssue', {
+            detail: {
+                sheetRow: sheetRow,
+                id: btn.dataset.id || '',
+                itgk: btn.dataset.itgk || '',
+                district: btn.dataset.district || '',
+                course: btn.dataset.course || '',
+                exam: btn.dataset.exam || '',
+                packet: btn.dataset.packet || '',
+                total: btn.dataset.total || ''
+            }
+        }));
     });
 
 
@@ -1150,16 +1191,16 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
     // BULK SELECTION SYSTEM
     // Direct checkbox binding -- called after each pagination render
     // =================================================================
-    (function() {
+    (function () {
 
         // â”€â”€ ITGK master lookup map (code â†’ {name, district}) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         var itgkMap = {};
         <?php foreach (($itgkList ?? []) as $itgk): ?>
-            itgkMap[<?= json_encode((string)$itgk['code']) ?>] = {
-                name: <?= json_encode((string)$itgk['name'])     ?>,
-                district: <?= json_encode((string)$itgk['district']) ?>,
-                email:    <?= json_encode((string)($itgk['email']  ?? '')) ?>,
-                mobile:   <?= json_encode((string)($itgk['mobile'] ?? '')) ?>
+            itgkMap[<?= json_encode((string) $itgk['code']) ?>] = {
+                name: <?= json_encode((string) $itgk['name']) ?>,
+                district: <?= json_encode((string) $itgk['district']) ?>,
+                email: <?= json_encode((string) ($itgk['email'] ?? '')) ?>,
+                mobile: <?= json_encode((string) ($itgk['mobile'] ?? '')) ?>
             };
         <?php endforeach; ?>
 
@@ -1183,7 +1224,7 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
             var itgkEl = document.getElementById('bulkSelItgk');
             if (countEl) countEl.textContent = count;
             if (itgkEl) {
-                var codes = [...new Set(keys.map(function(k) {
+                var codes = [...new Set(keys.map(function (k) {
                     return selectedCerts[k].itgk;
                 }))];
                 itgkEl.textContent = codes.join(', ') || '--';
@@ -1192,7 +1233,7 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
 
         // â”€â”€ Bind checkboxes -- call this after every render() â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         function bindCheckboxes() {
-            document.querySelectorAll('.cert-select-chk').forEach(function(chk) {
+            document.querySelectorAll('.cert-select-chk').forEach(function (chk) {
                 // Restore checked state if this row was previously selected
                 var sr = parseInt(chk.dataset.sheetRow, 10);
                 if (sr && selectedCerts[sr]) {
@@ -1204,7 +1245,7 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                 fresh.checked = chk.checked;
                 chk.parentNode.replaceChild(fresh, chk);
 
-                fresh.addEventListener('change', function() {
+                fresh.addEventListener('change', function () {
                     var sheetRow = parseInt(this.dataset.sheetRow, 10);
                     if (!sheetRow) {
                         console.warn('cert-select-chk: data-sheet-row is 0 or missing', this);
@@ -1238,7 +1279,7 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
         function syncSelectAllState() {
             var selAll = document.getElementById('chkSelectAll');
             if (!selAll) return;
-            var visChks = Array.from(document.querySelectorAll('.cert-select-chk')).filter(function(c) {
+            var visChks = Array.from(document.querySelectorAll('.cert-select-chk')).filter(function (c) {
                 var r = c.closest('.cert-main-row');
                 return r && r.style.display !== 'none';
             });
@@ -1247,10 +1288,10 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                 selAll.checked = false;
                 return;
             }
-            var allChecked = visChks.every(function(c) {
+            var allChecked = visChks.every(function (c) {
                 return c.checked;
             });
-            var someChecked = visChks.some(function(c) {
+            var someChecked = visChks.some(function (c) {
                 return c.checked;
             });
             selAll.checked = allChecked;
@@ -1260,13 +1301,13 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
         // â”€â”€ Select All â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         var selAllChk = document.getElementById('chkSelectAll');
         if (selAllChk) {
-            selAllChk.addEventListener('change', function() {
+            selAllChk.addEventListener('change', function () {
                 // Act on VISIBLE rows only
-                var visChks = Array.from(document.querySelectorAll('.cert-select-chk')).filter(function(c) {
+                var visChks = Array.from(document.querySelectorAll('.cert-select-chk')).filter(function (c) {
                     var r = c.closest('.cert-main-row');
                     return r && r.style.display !== 'none';
                 });
-                visChks.forEach(function(chk) {
+                visChks.forEach(function (chk) {
                     chk.checked = selAllChk.checked;
                     var sheetRow = parseInt(chk.dataset.sheetRow, 10);
                     if (!sheetRow) return;
@@ -1290,9 +1331,9 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
         }
 
         // â”€â”€ Clear selection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        document.getElementById('btnClearSel')?.addEventListener('click', function() {
+        document.getElementById('btnClearSel')?.addEventListener('click', function () {
             selectedCerts = {};
-            document.querySelectorAll('.cert-select-chk').forEach(function(c) {
+            document.querySelectorAll('.cert-select-chk').forEach(function (c) {
                 c.checked = false;
             });
             if (selAllChk) {
@@ -1303,12 +1344,12 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
         });
 
         // â”€â”€ Populate offcanvas when it opens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        document.getElementById('bulkIssueOffcanvas')?.addEventListener('show.bs.offcanvas', function() {
+        document.getElementById('bulkIssueOffcanvas')?.addEventListener('show.bs.offcanvas', function () {
             // Reset receiver fields for fresh ITGK prefill on each open
-            var _flds = ['bi_receiver_name','bi_receiver_desig','bi_receiver_mob','bi_receiver_email'];
-            _flds.forEach(function(id) { var el = document.getElementById(id); if(el) el.value=''; });
+            var _flds = ['bi_receiver_name', 'bi_receiver_desig', 'bi_receiver_mob', 'bi_receiver_email'];
+            _flds.forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
             var keys = Object.keys(selectedCerts);
-            var certs = keys.map(function(k) {
+            var certs = keys.map(function (k) {
                 return selectedCerts[k];
             });
 
@@ -1318,7 +1359,7 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
 
             // Hidden JSON field
             var jsonEl = document.getElementById('bi_selections_json');
-            if (jsonEl) jsonEl.value = JSON.stringify(certs.map(function(c) {
+            if (jsonEl) jsonEl.value = JSON.stringify(certs.map(function (c) {
                 return {
                     sheet_row: c.sheetRow,
                     itgk_code: c.itgk,
@@ -1328,13 +1369,13 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
             }));
 
             // ITGK info panel
-            var codes = [...new Set(certs.map(function(c) {
+            var codes = [...new Set(certs.map(function (c) {
                 return c.itgk;
             }))];
-            var dists = [...new Set(certs.map(function(c) {
+            var dists = [...new Set(certs.map(function (c) {
                 return c.district;
             }))];
-            var names = codes.map(function(cd) {
+            var names = codes.map(function (cd) {
                 return itgkMap[cd] ? itgkMap[cd].name : cd;
             });
             var codesEl = document.getElementById('bi_itgk_codes');
@@ -1346,14 +1387,14 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
             // Pre-fill receiver details from ITGK master data
             if (codes.length === 1 && itgkMap[codes[0]]) {
                 var itgkData = itgkMap[codes[0]];
-                var nameEl   = document.getElementById('bi_receiver_name');
-                var desigEl  = document.getElementById('bi_receiver_desig');
-                var mobEl    = document.getElementById('bi_receiver_mob');
-                var emailEl  = document.getElementById('bi_receiver_email');
-                if (nameEl  && !nameEl.value)  nameEl.value  = itgkData.name   || '';
+                var nameEl = document.getElementById('bi_receiver_name');
+                var desigEl = document.getElementById('bi_receiver_desig');
+                var mobEl = document.getElementById('bi_receiver_mob');
+                var emailEl = document.getElementById('bi_receiver_email');
+                if (nameEl && !nameEl.value) nameEl.value = itgkData.name || '';
                 if (desigEl && !desigEl.value) desigEl.value = 'ITGK Head / Coordinator';
-                if (mobEl   && !mobEl.value)   mobEl.value   = itgkData.mobile || '';
-                if (emailEl && !emailEl.value) emailEl.value = itgkData.email  || '';
+                if (mobEl && !mobEl.value) mobEl.value = itgkData.mobile || '';
+                if (emailEl && !emailEl.value) emailEl.value = itgkData.email || '';
             }
             // Validate: all selected certs must share the same ITGK code
             var itgkWarn = document.getElementById('bi_itgk_warn');
@@ -1374,7 +1415,7 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                 if (certs.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-2">No certificates selected</td></tr>';
                 } else {
-                    tbody.innerHTML = certs.map(function(c, i) {
+                    tbody.innerHTML = certs.map(function (c, i) {
                         return '<tr>' +
                             '<td class="fw-bold text-muted">' + (i + 1) + '</td>' +
                             '<td><code class="text-primary">' + (c.itgk || '--') + '</code></td>' +
@@ -1389,7 +1430,7 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
         });
 
         // â”€â”€ Bulk Issue Form Submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        document.getElementById('bulkIssueForm')?.addEventListener('submit', async function(e) {
+        document.getElementById('bulkIssueForm')?.addEventListener('submit', async function (e) {
             e.preventDefault();
             var keys = Object.keys(selectedCerts);
             if (keys.length === 0) {
@@ -1406,16 +1447,16 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
 
             // Refresh JSON hidden field
             var jsonEl = document.getElementById('bi_selections_json');
-            if (jsonEl) jsonEl.value = JSON.stringify(keys.map(function(k) {
+            if (jsonEl) jsonEl.value = JSON.stringify(keys.map(function (k) {
                 var c = selectedCerts[k];
                 return {
-                    sheet_row:   c.sheetRow,
-                    itgk_code:   c.itgk,
+                    sheet_row: c.sheetRow,
+                    itgk_code: c.itgk,
                     course_name: c.course,
-                    exam_name:   c.exam,
-                    packet_no:   c.packet  || '',
-                    grand_total: c.total   || 0,
-                    district:    c.district || ''
+                    exam_name: c.exam,
+                    packet_no: c.packet || '',
+                    grand_total: c.total || 0,
+                    district: c.district || ''
                 };
             }));
 
@@ -1462,14 +1503,14 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
         // â”€â”€ Expose bindCheckboxes so pagination render() can call it â”€â”€â”€â”€â”€â”€
 
         // quickIssue: single-row Issue button -> clear, select that row, open bulk offcanvas
-        document.addEventListener('quickIssue', function(e) {
+        document.addEventListener('quickIssue', function (e) {
             var d = e.detail;
             // Clear all selections
             selectedCerts = {};
             // Reset receiver fields so ITGK prefill fires fresh
-            var flds = ['bi_receiver_name','bi_receiver_desig','bi_receiver_mob','bi_receiver_email'];
-            flds.forEach(function(id) { var el = document.getElementById(id); if(el) el.value=''; });
-            document.querySelectorAll('.cert-select-chk').forEach(function(c) { c.checked = false; });
+            var flds = ['bi_receiver_name', 'bi_receiver_desig', 'bi_receiver_mob', 'bi_receiver_email'];
+            flds.forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
+            document.querySelectorAll('.cert-select-chk').forEach(function (c) { c.checked = false; });
             var sa = document.getElementById('chkSelectAll');
             if (sa) { sa.checked = false; sa.indeterminate = false; }
             // Add this single row

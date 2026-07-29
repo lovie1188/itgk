@@ -1,0 +1,38 @@
+/* Disable MDB Ripple Effect Globally */
+.ripple-surface,
+.ripple-surface-dark,
+.ripple-surface-light,
+[data-mdb-ripple],
+[data-ripple] {
+    --mdb-ripple-duration: 0s !important;
+    overflow: visible !important;
+}
+
+.ripple-surface::before,
+.ripple-surface::after,
+.ripple-surface-dark::before,
+.ripple-surface-dark::after,
+.ripple-surface-light::before,
+.ripple-surface-light::after,
+[data-mdb-ripple]::before,
+[data-mdb-ripple]::after,
+[data-ripple]::before,
+[data-ripple]::after {
+    display: none !important;
+    opacity: 0 !important;
+    animation: none !important;
+}
+
+/* Disable ripple wave animation */
+.ripple-wave {
+    display: none !important;
+    opacity: 0 !important;
+}
+
+/* Override any MDB ripple classes */
+.btn .ripple-surface,
+button .ripple-surface,
+a .ripple-surface {
+    pointer-events: none !important;
+    display: none !important;
+}

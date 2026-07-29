@@ -1499,6 +1499,8 @@ class CertificateController extends BaseController
         ], false);
     }
 
+    
+    
     public function sendAckEmail(): void
     {
         header('Content-Type: application/json');
@@ -1533,7 +1535,6 @@ class CertificateController extends BaseController
             $sheetRange    = $sheetService->getCertificateRange();
             $sheetData     = $sheetService->fetchParsedSheet($sheetId, $sheetRange);
             $rawRows       = $sheetData['rows'] ?? [];
-            $sheetStartRow = (int)($sheetData['startRow'] ?? 1);
 
             $certs = [];
             foreach ($rawRows as $idx => $r) {
@@ -1548,12 +1549,17 @@ class CertificateController extends BaseController
                         'exam_name'    => $r['EXAM']         ?? $r['Exam Name']       ?? '',
                         'itgk_code'    => $r['ITGK CODE']   ?? $r['ITGK Code']       ?? '',
                         'district'     => $r['DISTRICT']    ?? $r['District']         ?? '',
+                        'absent'       => (int)($r['ABSENT']      ?? $r['Absent']     ?? 0),
+                        'fail'         => (int)($r['FAIL']        ?? $r['Fail']       ?? 0),
                         'pass'         => (int)($r['PASS']        ?? $r['Pass']       ?? 0),
                         'grand_total'  => (int)($r['Grand Total'] ?? $r['grand_total'] ?? 0),
                         'packet_no'    => $r['Packet No.']         ?? $r['Packet No'] ?? '',
                         'cert_no_from' => $r['Certificate No. From'] ?? $r['Cert No From'] ?? '',
                         'cert_no_to'   => $r['Certificate No. To']   ?? $r['Cert No To']   ?? '',
                         'receiver_name' => $r['Receiver Name']       ?? '',
+                        'receiver_designation' => $r['Receiver Designation'] ?? '',
+                        'receiver_mobile'      => $r['Receiver Mobile Number'] ?? '',
+                        'issuer_info' => $r['Image'] ?? '',
                     ];
                 }
             }
@@ -1564,9 +1570,14 @@ class CertificateController extends BaseController
                 return;
             }
 
-            // Fetch ITGK email from ITGK Master
+            // Fetch ITGK details from ITGK Master
             $firstItgk = trim((string)($certs[0]['itgk_code'] ?? ''));
             $itgkEmail = null;
+            $itgkName = 'N/A';
+            $itgkAddress = 'N/A';
+            $itgkDistrict = 'N/A';
+            $itgkMobile = 'N/A';
+
             if ($firstItgk !== '') {
                 $itgkMasterId = $sheetService->getItgkMasterSheetId();
                 $itgkMasterRange = $sheetService->getItgkMasterRange();
@@ -1576,22 +1587,50 @@ class CertificateController extends BaseController
                 foreach ($itgkRows as $itgkRow) {
                     $code = strtolower(trim((string)($itgkRow['ITGK CODE'] ?? $itgkRow['ITGK Code'] ?? '')));
                     if (strcasecmp($code, $firstItgk) === 0) {
-                        $itgkEmail = trim((string)($itgkRow['Email'] ?? $itgkRow['EMAIL'] ?? ''));
+                        $itgkEmail    = trim((string)($itgkRow['Email'] ?? $itgkRow['EMAIL'] ?? ''));
+                        $itgkName     = trim((string)($itgkRow['ITGK Name'] ?? $itgkRow['ITGK NAME'] ?? $itgkRow['Name'] ?? 'N/A'));
+                        $itgkAddress  = trim((string)($itgkRow['Address'] ?? $itgkRow['ADDRESS'] ?? 'N/A'));
+                        $itgkDistrict = trim((string)($itgkRow['District'] ?? $itgkRow['DISTRICT'] ?? 'N/A'));
+                        $itgkMobile   = trim((string)($itgkRow['Mobile'] ?? $itgkRow['MOBILE'] ?? $itgkRow['Mobile No.'] ?? 'N/A'));
                         break;
                     }
                 }
             }
 
-            // Collect emails for 4 stakeholders
-            $currentUser = AuthService::user();
-            $issuerEmail = $currentUser['email'] ?? null;
-            $receiverEmail = $_SESSION['last_receiver_email'] ?? $itgkEmail;
+            $receiverName = htmlspecialchars((string)($certs[0]['receiver_name'] ?? 'N/A'));
+            $receiverDesig = htmlspecialchars((string)($certs[0]['receiver_designation'] ?? ''));
+            $receiverMob = htmlspecialchars((string)($certs[0]['receiver_mobile'] ?? ''));
 
+            $totalPass = array_sum(array_column($certs, 'pass'));
+            $totalGrand = array_sum(array_column($certs, 'grand_total'));
+
+            $currentUser = AuthService::user();
+            $issuerName = htmlspecialchars((string)($currentUser['name'] ?? $currentUser['username'] ?? 'N/A'));
+            $issuerRole = htmlspecialchars((string)($_SESSION['role'] ?? 'COORDINATOR'));
+
+            // Parse designation/Issued From from signature
+            $imageStr   = trim((string)($certs[0]['issuer_info'] ?? ''));
+            $issuerFrom = '';
+            if ($imageStr && preg_match('/Issued by:\s*(.+?)\s*\((.+?)\)/i', $imageStr, $m)) {
+                if (!$issuerName || $issuerName === 'N/A') {
+                    $issuerName = htmlspecialchars(trim($m[1]));
+                }
+                $issuerFrom = htmlspecialchars(trim($m[2]));
+            }
+            if (!$issuerFrom) {
+                $issuerFrom = $issuerRole;
+            }
+
+            $issueDate = date('d-m-Y');
+            $issueTime = date('h:i A');
+
+            // Collect emails for 4 stakeholders
+            $receiverEmail = $_SESSION['last_receiver_email'] ?? $itgkEmail;
             $recipients = array_unique(array_filter([
                 'softtechseva@gmail.com',
                 $receiverEmail,
                 $itgkEmail,
-                $issuerEmail
+                $currentUser['email'] ?? null
             ], function ($email) {
                 return $email && filter_var($email, FILTER_VALIDATE_EMAIL);
             }));
@@ -1602,84 +1641,250 @@ class CertificateController extends BaseController
                 return;
             }
 
-            // Send emails using EmailService
-            $emailService = new \App\Services\EmailService();
-            $subject = "Acknowledgement Slip Receipt - SoftSam Portal - Txn: {$txnId}";
-            
-            // Build table rows
+            // Enterprise Level Subject Line
+            $subject = "Certificate Issued ITGK - {$firstItgk} {$itgkName} {$txnId} {$issueDate}";
+
+            $baseUrl = (getenv('APP_URL') ?: 'http://localhost/certificate') . '/';
+            $logoBlackUrl = 'https://softtechsso.com/public/assets/img/logo.png';
+            $logoRkclUrl  = 'https://banner2.cleanpng.com/20180815/vph/2d8115343fb6430696c56a87cc2a6523.webp';
+            $verifyUrl = $baseUrl . 'verify/transaction?id=' . $txnId;
+
+            // Build table rows with full inline CSS (for email clients)
             $tableRows = '';
-            foreach ($certs as $index => $c) {
-                $tableRows .= "
-                <tr>
-                    <td style='padding: 6px; border: 1px solid #ddd;'>" . ($index + 1) . "</td>
-                    <td style='padding: 6px; border: 1px solid #ddd;'>" . htmlspecialchars((string)$c['course_name']) . "</td>
-                    <td style='padding: 6px; border: 1px solid #ddd;'>" . htmlspecialchars((string)$c['exam_name']) . "</td>
-                    <td style='padding: 6px; border: 1px solid #ddd;'>" . htmlspecialchars((string)$c['packet_no']) . "</td>
-                    <td style='padding: 6px; border: 1px solid #ddd;'>" . htmlspecialchars((string)$c['cert_no_from']) . " - " . htmlspecialchars((string)$c['cert_no_to']) . "</td>
-                    <td style='padding: 6px; border: 1px solid #ddd; text-align: center;'>" . htmlspecialchars((string)$c['grand_total']) . "</td>
-                </tr>";
+            $rowBg = true;
+            foreach ($certs as $c) {
+                $bg = $rowBg ? '#ffffff' : '#f8fafc';
+                $rowBg = !$rowBg;
+                $tableRows .= "<tr style='background:{$bg};'>"
+                    . "<td style='padding:6px 10px;border:1px solid #e2e8f0;font-size:12px;'>"
+                    . "<strong style='color:#0f172a;'>" . htmlspecialchars((string)($c['course_name'] ?? '-')) . "</strong>"
+                    . "<br><span style='font-size:10px;color:#64748b;'>" . htmlspecialchars((string)($c['exam_name'] ?? '-')) . "</span></td>"
+                    . "<td style='padding:6px 10px;border:1px solid #e2e8f0;text-align:center;font-weight:700;color:#0f172a;font-size:12px;'>" . (int)($c['pass'] ?? 0) . "</td>"
+                    . "<td style='padding:6px 10px;border:1px solid #e2e8f0;text-align:center;font-size:12px;'>" . htmlspecialchars((string)($c['packet_no'] ?? '-')) . "</td>"
+                    . "<td style='padding:6px 10px;border:1px solid #e2e8f0;font-size:12px;'>" . htmlspecialchars((string)($c['cert_no_from'] ?? '-')) . "</td>"
+                    . "<td style='padding:6px 10px;border:1px solid #e2e8f0;font-size:12px;'>" . htmlspecialchars((string)($c['cert_no_to'] ?? '-')) . "</td>"
+                    . "<td style='padding:6px 10px;border:1px solid #e2e8f0;text-align:center;font-weight:700;color:#10b981;font-size:12px;'>Issued</td>"
+                    . "</tr>";
             }
 
-            $emailBody = "
-            <!DOCTYPE html>
-            <html>
-            <body style='font-family: Arial, sans-serif; line-height: 1.5; color: #333;'>
-                <div style='max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 20px; border-radius: 8px;'>
-                    <div style='text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 12px; margin-bottom: 15px;'>
-                        <h2 style='color: #2563eb; margin: 0;'>SoftSam ITGK Certificate Portal</h2>
-                        <p style='margin: 4px 0 0 0; color: #64748b; font-size: 13px;'>Acknowledgement Receipt</p>
-                    </div>
-                    <p>Dear Representative / Stakeholder,</p>
-                    <p>An official receipt slip has been generated for your certificate issuance transaction. Details are provided below:</p>
-                    
-                    <div style='background: #f1f5f9; padding: 12px; border-radius: 6px; font-size: 13px; margin-bottom: 15px;'>
-                        <p style='margin: 0 0 4px 0;'><strong>Transaction ID:</strong> " . htmlspecialchars($txnId) . "</p>
-                        <p style='margin: 0 0 4px 0;'><strong>ITGK Code:</strong> " . htmlspecialchars($firstItgk) . "</p>
-                        <p style='margin: 0;'><strong>Date of Transaction:</strong> " . date('d-m-Y H:i:s') . "</p>
-                    </div>
+            // Build email body using 100% inline CSS (works in Gmail, Outlook, Yahoo)
+            $emailBody = <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Certificate Issue Acknowledgement</title>
+</head>
+<body style="margin:0;padding:20px 10px;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#334155;">
 
-                    <table style='width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 12px;'>
-                        <thead>
-                            <tr style='background: #e2e8f0;'>
-                                <th style='padding: 6px; border: 1px solid #ddd; text-align: left;'>#</th>
-                                <th style='padding: 6px; border: 1px solid #ddd; text-align: left;'>Course</th>
-                                <th style='padding: 6px; border: 1px solid #ddd; text-align: left;'>Exam</th>
-                                <th style='padding: 6px; border: 1px solid #ddd; text-align: left;'>Packet No</th>
-                                <th style='padding: 6px; border: 1px solid #ddd; text-align: left;'>Certificate Nos</th>
-                                <th style='padding: 6px; border: 1px solid #ddd; text-align: center;'>Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {$tableRows}
-                        </tbody>
-                    </table>
+<!-- Outer Wrapper -->
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:800px;margin:0 auto;">
+<tr><td>
 
-                    <p style='font-size: 13px; color: #475569;'>This email serves as an automated receipt. Please verify with the portal or physically count the certificates upon receipt.</p>
-                    <hr style='border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;'>
-                    <p style='color: #64748b; font-size: 11px; text-align: center; margin: 0;'>Sent securely via SoftSam Certificate Management System</p>
-                </div>
-            </body>
-            </html>";
+<!-- HEADER -->
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border-radius:6px 6px 0 0;border:1px solid #e2e8f0;border-bottom:none;">
+<tr>
+  <td style="padding:10px 15px;width:90px;vertical-align:middle;">
+    <img src="{$logoBlackUrl}" alt="Softtech Logo" height="60" style="display:block;height:60px;object-fit:contain;">
+  </td>
+  <td style="padding:10px;text-align:center;vertical-align:middle;">
+    <div style="font-size:18px;font-weight:900;color:#0f172a;letter-spacing:0.5px;margin-bottom:2px;">SOFTTECH MULTI SERVICE PVT. LTD.</div>
+    <div style="font-size:11px;font-weight:600;color:#64748b;margin-bottom:4px;">RKCL SP, Emitra LSP</div>
+    <div style="font-size:13px;font-weight:700;color:#1e3a8a;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Certificate Issue Acknowledgement</div>
+    <span style="display:inline-block;background:#10b981;color:#fff;font-size:11px;font-weight:700;padding:3px 14px;border-radius:4px;text-transform:uppercase;">&#10003; Issued</span>
+  </td>
+  <td style="padding:10px 15px;width:80px;vertical-align:middle;text-align:right;">
+    <img src="{$logoRkclUrl}" alt="RKCL Logo" height="55" style="display:block;height:55px;object-fit:contain;">
+  </td>
+</tr>
+</table>
 
-            $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
-            $mail->isSMTP();
-            $settings = $emailService->getSettings();
-            $mail->Host = $settings['smtp_host'];
-            $mail->SMTPAuth = true;
-            $mail->Username = $settings['smtp_user'];
-            $mail->Password = $settings['smtp_pass'];
-            
-            $encryption = strtolower($settings['smtp_encryption']);
-            $mail->SMTPSecure = ($encryption === 'ssl') ? \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS : \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-            $mail->Port = (int)$settings['smtp_port'];
-            $mail->SMTPOptions = [
-                'ssl' => [
-                    'verify_peer' => false,
-                    'verify_peer_name' => false,
-                    'allow_self_signed' => true
-                ]
-            ];
-            $mail->setFrom($settings['smtp_from_email'], $settings['smtp_from_name']);
+<!-- STATUS BAR -->
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-bottom:none;">
+<tr>
+  <td style="padding:8px 15px;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      <td style="width:20%;padding:4px 6px;vertical-align:top;">
+        <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:2px;">Transaction ID</div>
+        <div style="font-size:11px;font-weight:700;color:#1e293b;">{$txnId}</div>
+      </td>
+      <td style="width:20%;padding:4px 6px;vertical-align:top;">
+        <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:2px;">Issue Date</div>
+        <div style="font-size:11px;font-weight:700;color:#1e293b;">{$issueDate}</div>
+      </td>
+      <td style="width:20%;padding:4px 6px;vertical-align:top;">
+        <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:2px;">Issue Time</div>
+        <div style="font-size:11px;font-weight:700;color:#1e293b;">{$issueTime}</div>
+      </td>
+      <td style="width:20%;padding:4px 6px;vertical-align:top;">
+        <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:2px;">Issued By</div>
+        <div style="font-size:11px;font-weight:700;color:#1e293b;">{$issuerName}</div>
+      </td>
+      <td style="width:20%;padding:4px 6px;vertical-align:top;">
+        <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:2px;">Issued From</div>
+        <div style="font-size:11px;font-weight:700;color:#1e293b;">{$issuerFrom}</div>
+      </td>
+    </tr>
+    </table>
+  </td>
+</tr>
+</table>
+
+<!-- CONTENT ROW: Recipient + Verification -->
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e2e8f0;border-top:none;border-bottom:none;">
+<tr>
+  <!-- Recipient / ITGK Card -->
+  <td style="width:65%;vertical-align:top;border-right:1px solid #e2e8f0;">
+    <div style="background:#1e3a8a;color:#fff;font-weight:700;font-size:11px;padding:5px 10px;text-transform:uppercase;letter-spacing:0.5px;">Recipient / ITGK Details</div>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fff;">
+      <tr>
+        <td style="padding:5px 8px;width:50%;vertical-align:top;">
+          <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;">IT GK Name</div>
+          <div style="font-size:12px;font-weight:700;color:#1e293b;">{$itgkName}</div>
+        </td>
+        <td style="padding:5px 8px;width:50%;vertical-align:top;">
+          <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;">IT GK Code</div>
+          <div style="font-size:12px;font-weight:700;color:#1e293b;">{$firstItgk}</div>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2" style="padding:5px 8px;vertical-align:top;">
+          <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;">Address</div>
+          <div style="font-size:12px;font-weight:700;color:#1e293b;">{$itgkAddress}</div>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:5px 8px;vertical-align:top;">
+          <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;">District</div>
+          <div style="font-size:12px;font-weight:700;color:#1e293b;">{$itgkDistrict}</div>
+        </td>
+        <td style="padding:5px 8px;vertical-align:top;">
+          <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;">Receiver Name</div>
+          <div style="font-size:12px;font-weight:700;color:#1e293b;">{$receiverName}</div>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:5px 8px;vertical-align:top;">
+          <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;">Email</div>
+          <div style="font-size:12px;font-weight:700;color:#1e293b;">{$itgkEmail}</div>
+        </td>
+        <td style="padding:5px 8px;vertical-align:top;">
+          <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;">Receiver Mobile</div>
+          <div style="font-size:12px;font-weight:700;color:#1e293b;">{$receiverMob}</div>
+        </td>
+      </tr>
+    </table>
+  </td>
+  <!-- Verification Panel -->
+  <td style="width:35%;vertical-align:top;background:#f0fdf4;text-align:center;padding:12px 10px;">
+    <div style="color:#166534;font-weight:800;font-size:11px;text-transform:uppercase;margin-bottom:6px;">&#10003; Verification</div>
+    <div style="font-size:10px;color:#475569;margin-bottom:8px;">Scan QR Code to verify this transaction online.</div>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data={$verifyUrl}" width="100" height="100" alt="QR Code" style="border:1px solid #cbd5e1;padding:2px;background:#fff;border-radius:4px;display:block;margin:0 auto 8px;">
+    <a href="{$verifyUrl}" style="color:#2563eb;font-weight:700;font-size:10px;text-decoration:none;display:block;margin-bottom:4px;">Verify Online</a>
+    <div style="color:#1e3a8a;font-size:9px;word-break:break-all;margin-bottom:4px;">{$verifyUrl}</div>
+    <div style="color:#64748b;font-size:9px;">Ref No: RKCL-{$txnId}</div>
+  </td>
+</tr>
+</table>
+
+<!-- CERTIFICATE TABLE -->
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e2e8f0;border-top:none;border-bottom:none;">
+<tr>
+  <td style="padding:10px 15px;background:#fff;">
+    <div style="font-weight:700;font-size:11px;text-transform:uppercase;color:#1e3a8a;margin-bottom:8px;">Certificate Details</div>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-size:12px;">
+    <thead>
+      <tr style="background:#1e3a8a;">
+        <th style="padding:5px 10px;color:#fff;font-weight:700;text-align:left;border:1px solid #1e3a8a;font-size:10px;text-transform:uppercase;">Course / Exam Name</th>
+        <th style="padding:5px 10px;color:#fff;font-weight:700;text-align:center;border:1px solid #1e3a8a;font-size:10px;text-transform:uppercase;">Pass</th>
+        <th style="padding:5px 10px;color:#fff;font-weight:700;text-align:center;border:1px solid #1e3a8a;font-size:10px;text-transform:uppercase;">Packet No</th>
+        <th style="padding:5px 10px;color:#fff;font-weight:700;text-align:left;border:1px solid #1e3a8a;font-size:10px;text-transform:uppercase;">Cert No. From</th>
+        <th style="padding:5px 10px;color:#fff;font-weight:700;text-align:left;border:1px solid #1e3a8a;font-size:10px;text-transform:uppercase;">Cert No. To</th>
+        <th style="padding:5px 10px;color:#fff;font-weight:700;text-align:center;border:1px solid #1e3a8a;font-size:10px;text-transform:uppercase;">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {$tableRows}
+      <tr style="background:#f1f5f9;">
+        <td style="padding:5px 10px;border:1px solid #e2e8f0;text-align:right;font-weight:800;color:#0f172a;font-size:12px;">TOTAL</td>
+        <td style="padding:5px 10px;border:1px solid #e2e8f0;text-align:center;font-weight:800;color:#0f172a;font-size:13px;">{$totalPass}</td>
+        <td colspan="4" style="padding:5px 10px;border:1px solid #e2e8f0;"></td>
+      </tr>
+    </tbody>
+    </table>
+  </td>
+</tr>
+</table>
+
+<!-- METADATA ROW -->
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-bottom:none;">
+<tr>
+  <td style="padding:6px 15px;font-size:10px;color:#64748b;">
+    Generated On: {$issueDate} {$issueTime} &nbsp;|&nbsp; Generated By: System &nbsp;|&nbsp; Version: v2.1.0 &nbsp;|&nbsp; System Generated Acknowledgement
+  </td>
+</tr>
+</table>
+
+<!-- DARK BANNER -->
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0f172a;border:1px solid #0f172a;border-top:none;border-bottom:none;">
+<tr>
+  <td style="padding:10px 15px;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      <td style="width:45%;vertical-align:top;padding-right:10px;border-right:1px solid #334155;">
+        <div style="font-size:10px;color:#e2e8f0;line-height:1.4;"><strong style="color:#f59e0b;">&#9432; Important Note</strong><br>This acknowledgement is digitally generated and does not require physical signature.</div>
+      </td>
+      <td style="width:35%;vertical-align:top;padding:0 10px;border-right:1px solid #334155;">
+        <div style="font-size:10px;color:#cbd5e1;line-height:1.8;">
+          <a href="https://www.softtechseva.com" style="color:#60a5fa;text-decoration:none;">www.softtechseva.com</a><br>
+          <a href="mailto:softtechseva@gmail.com" style="color:#60a5fa;text-decoration:none;">softtechseva@gmail.com</a><br>
+          +91 9983750284
+        </div>
+      </td>
+      <td style="width:20%;vertical-align:middle;padding-left:10px;text-align:right;">
+        <div style="font-weight:700;font-style:italic;font-size:10px;color:#94a3b8;line-height:1.3;">Technology | Trust | Service<br><span style="font-size:9px;font-weight:normal;">Empowering Digitally, Enriching Lives.</span></div>
+      </td>
+    </tr>
+    </table>
+  </td>
+</tr>
+</table>
+
+<!-- SECURITY DISCLAIMER -->
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fff0f0;border:1px solid #fecaca;border-top:none;border-bottom:none;">
+<tr>
+  <td style="padding:10px 15px;">
+    <div style="font-size:10px;color:#7f1d1d;line-height:1.5;">
+      <strong>&#128737; CONFIDENTIALITY &amp; SECURITY NOTICE:</strong><br>
+      This is an automated enterprise email. If you received this in error, delete it immediately. It may contain sensitive information. Do not click links or scan QR codes if you do not trust the source. This system operates under strict anti-spam and security protocols.
+    </div>
+  </td>
+</tr>
+</table>
+
+<!-- FOOTER -->
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 6px 6px;">
+<tr>
+  <td style="padding:8px 15px;text-align:center;font-size:11px;color:#475569;">
+    Developed By: <a href="http://rakshaeservices.co.in/" style="color:#3b82f6;text-decoration:none;"><strong>Raksha E Services</strong></a> &nbsp;|&nbsp;
+    Developer: <strong>LOVEJEET SINGH BHATI (+91 94615838757)</strong> &nbsp;|&nbsp;
+    e-Mail: <strong>rakshaeservices@gmail.com</strong>
+  </td>
+</tr>
+</table>
+
+</td></tr>
+</table>
+
+</body>
+</html>
+HTML;
+
+            $emailService = new \App\Services\EmailService();
+
+            $mail = $emailService->getMailerInstance();
             
             foreach ($recipients as $email) {
                 $mail->addAddress($email);
@@ -1690,10 +1895,223 @@ class CertificateController extends BaseController
             $mail->Body = $emailBody;
             $mail->send();
 
-            echo json_encode(['success' => true, 'message' => 'Acknowledgement email sent to 4 stakeholders successfully!']);
+            echo json_encode(['success' => true, 'message' => 'Acknowledgement email sent to ' . count($recipients) . ' stakeholders successfully!']);
         } catch (\Exception $e) {
             http_response_code(500);
             echo json_encode(['success' => false, 'message' => 'Failed to send email: ' . $e->getMessage()]);
+        }
+    }
+    
+    
+
+    public function verifyTransaction(): void
+    {
+        $txnId = trim((string)($_GET['id'] ?? ''));
+        if ($txnId === '') {
+            http_response_code(400);
+            echo 'Transaction ID is required.';
+            return;
+        }
+
+        // Fetch all certificates
+        $sheetService  = new \App\Services\GoogleSheetService();
+        $sheetId       = $sheetService->getCertificateSheetId();
+        $sheetRange    = $sheetService->getCertificateRange();
+        $sheetData     = $sheetService->fetchParsedSheet($sheetId, $sheetRange);
+        $rawRows       = $sheetData['rows'] ?? [];
+
+        // STRATEGY: Extract date from txnId itself (format: ISSUE-YYYYMMDD-HASH)
+        // Group ALL ISSUED rows by ITGK code (Image column may be empty).
+        // For each group, compute hash using same formula as acknowledgement():
+        //   md5($itgkCode . implode(',', sorted_numericIds))
+        // Try matching with both: Image date AND date from txnId itself.
+
+        // Step 1: Extract the date portion from txnId
+        $txnDateYmd = '';
+        if (preg_match('/^ISSUE-(\d{8})-[A-Z0-9]{6}$/i', $txnId, $txnMatch)) {
+            $txnDateYmd = $txnMatch[1]; // e.g. "20260729"
+        }
+
+        // Step 2: Group ALL ISSUED rows by ITGK code
+        $groups = [];
+        foreach ($rawRows as $idx => $r) {
+            $status = strtoupper(trim((string)($r['STATUS'] ?? $r['Status'] ?? '')));
+            if ($status !== 'ISSUED') continue;
+            $itgkCode = trim((string)($r['ITGK CODE'] ?? $r['ITGK Code'] ?? ''));
+            if ($itgkCode === '') continue;
+
+            $image = trim((string)($r['Image'] ?? $r['W'] ?? ''));
+            $imageDateYmd = '';
+            if ($image && preg_match('/on\s+(\d{2})\/(\d{2})\/(\d{4})/i', $image, $dm)) {
+                $imageDateYmd = $dm[3] . $dm[2] . $dm[1];
+            }
+
+            $rowId        = (string)($r['S. No.'] ?? ($idx + 1));
+            $rowNumericId = (int)preg_replace('/^certificate\s*/i', '', $rowId);
+            if ($rowNumericId <= 0) continue;
+
+            if (!isset($groups[$itgkCode])) {
+                $groups[$itgkCode] = [
+                    'itgkCode'   => $itgkCode,
+                    'dateYmd'    => $imageDateYmd ?: $txnDateYmd,
+                    'certs'      => [],
+                    'firstImage' => $image
+                ];
+            }
+            $groups[$itgkCode]['certs'][] = [
+                'numericId' => $rowNumericId,
+                'row'       => $r
+            ];
+        }
+
+        // Step 3: Find the matching group by computing hash
+        // Try both the Image date AND the txnId date (handles empty Image column)
+        $matchedGroup = null;
+        $matchedCerts = [];
+        foreach ($groups as $itgkCode => $g) {
+            $ids = array_column($g['certs'], 'numericId');
+            sort($ids);
+            $hash = strtoupper(substr(md5($g['itgkCode'] . implode(',', $ids)), 0, 6));
+
+            // Try with Image date
+            if ($g['dateYmd'] !== '') {
+                if ('ISSUE-' . $g['dateYmd'] . '-' . $hash === $txnId) {
+                    $matchedGroup = $g;
+                    $matchedCerts = $g['certs'];
+                    break;
+                }
+            }
+
+            // Fallback: try with date from txnId (for certs with empty Image column)
+            if ($txnDateYmd !== '' && $txnDateYmd !== $g['dateYmd']) {
+                if ('ISSUE-' . $txnDateYmd . '-' . $hash === $txnId) {
+                    $matchedGroup = $g;
+                    $matchedGroup['dateYmd'] = $txnDateYmd;
+                    $matchedCerts = $g['certs'];
+                    break;
+                }
+            }
+        }
+        
+        if (!$matchedGroup) {
+            $this->view('pages/certificate/verify_error', ['txnId' => $txnId], false);
+            return;
+        }
+
+        // We found a match! Fetch ITGK Master details
+        $itgkEmail = '';
+        $itgkName = 'N/A';
+        $itgkAddress = 'N/A';
+        $itgkDistrict = 'N/A';
+        $itgkMobile = 'N/A';
+        
+        $itgkMasterId = $sheetService->getItgkMasterSheetId();
+        $itgkMasterRange = $sheetService->getItgkMasterRange();
+        $itgkMasterData = $sheetService->fetchParsedSheet($itgkMasterId, $itgkMasterRange);
+        $itgkRows = $itgkMasterData['rows'] ?? [];
+
+        foreach ($itgkRows as $itgkRow) {
+            $code = strtolower(trim((string)($itgkRow['ITGK CODE'] ?? $itgkRow['ITGK Code'] ?? '')));
+            if (strcasecmp($code, $matchedGroup['itgkCode']) === 0) {
+                $itgkEmail    = trim((string)($itgkRow['Email'] ?? $itgkRow['EMAIL'] ?? ''));
+                $itgkName     = trim((string)($itgkRow['ITGK Name'] ?? $itgkRow['ITGK NAME'] ?? $itgkRow['Name'] ?? 'N/A'));
+                $itgkAddress  = trim((string)($itgkRow['Address'] ?? $itgkRow['ADDRESS'] ?? 'N/A'));
+                $itgkDistrict = trim((string)($itgkRow['District'] ?? $itgkRow['DISTRICT'] ?? 'N/A'));
+                $itgkMobile   = trim((string)($itgkRow['Mobile'] ?? $itgkRow['MOBILE'] ?? $itgkRow['Mobile No.'] ?? 'N/A'));
+                break;
+            }
+        }
+        
+        $certsFormatted = [];
+        foreach ($matchedCerts as $cData) {
+            $r = $cData['row'];
+            $certsFormatted[] = [
+                'course_name'  => $r['Course Name'] ?? '',
+                'exam_name'    => $r['EXAM'] ?? $r['Exam Name'] ?? '',
+                'packet_no'    => $r['Packet No.'] ?? $r['Packet No'] ?? '',
+                'cert_no_from' => $r['Certificate No. From'] ?? $r['Cert No From'] ?? '',
+                'cert_no_to'   => $r['Certificate No. To'] ?? $r['Cert No To'] ?? '',
+                'pass'         => (int)($r['PASS'] ?? $r['Pass'] ?? 0)
+            ];
+        }
+        
+        // Extract issuer details
+        $issuerName = 'N/A';
+        $issuerFrom = 'N/A';
+        $issueDateStr = '';
+        if (preg_match('/Issued by:\s*(.+?)\s*\((.+?)\)\s*\|\s*Mob:.*?\|\s*on\s*(.+)/i', $matchedGroup['firstImage'], $m)) {
+            $issuerName = trim($m[1]);
+            $issuerFrom = trim($m[2]);
+            $issueDateStr = trim($m[3]);
+        }
+        
+        $this->view('pages/certificate/verify', [
+            'txnId' => $txnId,
+            'itgkCode' => $matchedGroup['itgkCode'],
+            'itgkName' => $itgkName,
+            'itgkAddress' => $itgkAddress,
+            'itgkDistrict' => $itgkDistrict,
+            'itgkMobile' => $itgkMobile,
+            'issuerName' => $issuerName,
+            'issuerFrom' => $issuerFrom,
+            'issueDateStr' => $issueDateStr,
+            'certs' => $certsFormatted,
+            'totalPass' => array_sum(array_column($certsFormatted, 'pass'))
+        ], false);
+    }
+
+    public function logVerification(): void
+    {
+        header('Content-Type: application/json');
+        
+        $input = json_decode(file_get_contents('php://input'), true) ?: [];
+        $txnId = trim((string)($input['txn_id'] ?? ''));
+        $visitorName = trim((string)($input['visitor_name'] ?? 'Anonymous'));
+        $visitorMob = trim((string)($input['visitor_mobile'] ?? 'N/A'));
+        
+        if (!$txnId) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Txn ID missing']);
+            return;
+        }
+
+        $ipAddress = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
+        $timestamp = date('d-m-Y H:i:s');
+
+        try {
+            $emailService = new \App\Services\EmailService();
+            $mail = $emailService->getMailerInstance();
+            $mail->addAddress('softtechseva@gmail.com');
+            $mail->isHTML(true);
+            $mail->Subject = "Verification Accessed - Txn: {$txnId}";
+            
+            $emailBody = "
+            <!DOCTYPE html>
+            <html>
+            <body style='font-family: Arial, sans-serif; line-height: 1.5; color: #333;'>
+                <div style='max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 20px; border-radius: 8px;'>
+                    <h2 style='color: #2563eb; margin-top: 0;'>Verification Attempt Logged</h2>
+                    <p>A user has accessed the verification page for Transaction <strong>{$txnId}</strong>.</p>
+                    <table style='width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 13px;'>
+                        <tr><td style='padding: 6px; border: 1px solid #ddd; font-weight: bold;'>Visitor Name:</td><td style='padding: 6px; border: 1px solid #ddd;'>{$visitorName}</td></tr>
+                        <tr><td style='padding: 6px; border: 1px solid #ddd; font-weight: bold;'>Visitor Mobile:</td><td style='padding: 6px; border: 1px solid #ddd;'>{$visitorMob}</td></tr>
+                        <tr><td style='padding: 6px; border: 1px solid #ddd; font-weight: bold;'>Device / User Agent:</td><td style='padding: 6px; border: 1px solid #ddd;'>{$userAgent}</td></tr>
+                        <tr><td style='padding: 6px; border: 1px solid #ddd; font-weight: bold;'>IP Address:</td><td style='padding: 6px; border: 1px solid #ddd;'>{$ipAddress}</td></tr>
+                        <tr><td style='padding: 6px; border: 1px solid #ddd; font-weight: bold;'>Timestamp:</td><td style='padding: 6px; border: 1px solid #ddd;'>{$timestamp}</td></tr>
+                    </table>
+                    <p style='color: #64748b; font-size: 11px; margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 10px;'>SoftSam Certificate Security System</p>
+                </div>
+            </body>
+            </html>";
+
+            $mail->Body = $emailBody;
+            $mail->send();
+
+            echo json_encode(['success' => true, 'message' => 'Logged successfully.']);
+        } catch (\Exception $e) {
+            \App\Helpers\Logger::error('Failed to send verification log email', ['error' => $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => 'Failed to send log email: ' . $e->getMessage()]);
         }
     }
 
