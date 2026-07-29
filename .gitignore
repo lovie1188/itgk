@@ -1,0 +1,14 @@
+# SoftSam Certificate Portal Git Ignore
+.env
+vendor/
+node_modules/
+config/gen-lang-client-*.json
+_backup/
+logs/
+*.log
+.gemini/
+scratch/
+transcript*.jsonl
+task.md
+implementation_plan.md
+walkthrough.md
