@@ -78,7 +78,8 @@ class CertificateController extends BaseController
                     'receiver_name'        => $r['Receiver Name']       ?? '',
                     'receiver_designation' => $r['Receiver Designation'] ?? '',
                     'receiver_mobile'      => $r['Receiver Mobile Number'] ?? '',
-                    'image'                => $r['Image'] ?? '',
+                    'issued_by'            => $r['Issued By']           ?? '',
+                    'image'                => $r['Image']               ?? '',
                     'sheet_row'            => $actualSheetRow, // exact Google Sheet row
                 ];
             }
@@ -141,8 +142,11 @@ class CertificateController extends BaseController
             Logger::error('Failed to fetch ITGK master list', ['error' => $e->getMessage()]);
         }
 
-        // Fetch Current Location dropdown options from sheet 'misc', range J2:J18
+        // Fetch dropdown options dynamically from 'misc' sheet
         $locationOptions = $sheetService->getLocationOptions();
+        $statusOptions   = $sheetService->getStatusOptions();
+        $districtOptions = $sheetService->getDistrictOptions();
+        $remarkOptions   = $sheetService->getRemarkOptions();
 
         // Pass ALL records — JS handles pagination on client side (no server-side slicing)
         $this->view('pages/certificate/list', [
@@ -155,6 +159,9 @@ class CertificateController extends BaseController
             'sheetTab'        => $sheetService->getCertificateTab() ?? 'Certificate',
             'itgkList'        => $itgkList,
             'locationOptions' => $locationOptions,
+            'statusOptions'   => $statusOptions,
+            'districtOptions' => $districtOptions,
+            'remarkOptions'   => $remarkOptions,
         ]);
     }
 
@@ -181,24 +188,24 @@ class CertificateController extends BaseController
             $sheetId      = $sheetService->getCertificateSheetId();
             $tab          = $sheetService->getCertificateTab();
 
-            // Certificate sheet columns Aâ€“V (22 cols):
+            // Certificate sheet columns A–W (23 cols):
             // A=S.No, B=Course Name, C=DATE, D=EXAM, E=EXAM_DATE_ITGK,
             // F=ITGK CODE, G=DISTRICT, H=ABSENT, I=FAIL, J=PASS, K=UFM,
             // L=Grand Total, M=Packet No., N=Cert No. From, O=Cert No. To,
             // P=Current Location, Q=STATUS, R=Remark,
-            // S=Receiver Name, T=Receiver Designation, U=Receiver Mobile Number, V=Image
-            $range = "{$tab}!A{$sheetRow}:V{$sheetRow}";
+            // S=Receiver Name, T=Receiver Designation, U=Receiver Mobile Number, V=Issued By, W=Image
+            $range = "{$tab}!A{$sheetRow}:W{$sheetRow}";
 
-            // Fetch existing row first â€” only modified columns will be overwritten;
+            // Fetch existing row first — only modified columns will be overwritten;
             // all other columns remain exactly as they were received from the sheet.
             $existing = $sheetService->fetchRawRow($sheetId, $range);
 
-            // Pad to 22 columns
-            while (count($existing) < 22) {
+            // Pad to 23 columns
+            while (count($existing) < 23) {
                 $existing[] = '';
             }
 
-            // Column map: POST key â†’ 0-indexed column position
+            // Column map: POST key → 0-indexed column position
             $columnMap = [
                 'course_name'     => 1,   // B - Course Name
                 'receiving_date'  => 2,   // C - DATE
@@ -219,6 +226,8 @@ class CertificateController extends BaseController
                 'receiver_name'   => 18,  // S - Receiver Name
                 'receiver_designation' => 19, // T - Receiver Designation
                 'receiver_mobile' => 20,  // U - Receiver Mobile Number
+                'issued_by'       => 21,  // V - Issued By
+                'image'           => 22,  // W - Image
             ];
 
             $modified = false;

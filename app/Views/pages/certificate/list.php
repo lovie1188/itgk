@@ -224,6 +224,8 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                                             data-receiver="<?= htmlspecialchars((string)($row['receiver_name'] ?? '')) ?>"
                                             data-desig="<?= htmlspecialchars((string)($row['receiver_designation'] ?? '')) ?>"
                                             data-mobile="<?= htmlspecialchars((string)($row['receiver_mobile'] ?? '')) ?>"
+                                            data-issuedby="<?= htmlspecialchars((string)($row['issued_by'] ?? '')) ?>"
+                                            data-image="<?= htmlspecialchars((string)($row['image'] ?? '')) ?>"
                                             data-sheetrow="<?= (int)($row['sheet_row'] ?? 0) ?>"
                                             data-bs-toggle="offcanvas" data-bs-target="#editCertOffcanvas"
                                             title="Edit Record">
@@ -649,10 +651,9 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                     <label class="form-label fw-semibold small mb-0">Status</label>
                     <select name="status" id="ec_status" class="form-select form-select-sm">
                         <option value="">-- Select --</option>
-                        <option value="Not Received">Not Received</option>
-                        <option value="Available">Available</option>
-                        <option value="Issued">Issued</option>
-                        <option value="InTransit">In Transit</option>
+                        <?php foreach ($statusOptions ?? ['Available', 'Issued', 'Not Received', 'InTransit'] as $status): ?>
+                        <option value="<?= htmlspecialchars($status) ?>"><?= htmlspecialchars($status) ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="col-md-6 mb-1">
@@ -679,6 +680,14 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
                 <div class="col-md-6 mb-1">
                     <label class="form-label fw-semibold small mb-0">Mobile</label>
                     <input type="text" name="receiver_mobile" id="ec_mobile" class="form-control form-control-sm" placeholder="Mobile Number">
+                </div>
+                <div class="col-12 mb-1">
+                    <label class="form-label fw-semibold small mb-0">Issued By</label>
+                    <input type="text" name="issued_by" id="ec_issuedby" class="form-control form-control-sm" placeholder="Issued By" readonly>
+                </div>
+                <div class="col-12 mb-1">
+                    <label class="form-label fw-semibold small mb-0">Image / Photo URL</label>
+                    <input type="text" name="image" id="ec_image" class="form-control form-control-sm" placeholder="Image URL">
                 </div>
                 <div class="col-12 mt-2">
                     <button type="submit" class="btn btn-warning btn-sm py-1 w-100 fw-bold" id="btnEditCertSubmit">
@@ -1034,7 +1043,20 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
             };
             const sel = (id, val) => {
                 const el = document.getElementById(id);
-                if (el) el.value = val || '';
+                if (!el) return;
+                val = (val || '').trim();
+                let found = false;
+                for (let i = 0; i < el.options.length; i++) {
+                    const optVal = el.options[i].value.trim();
+                    if (optVal.toLowerCase().replace(/\s+/g, '') === val.toLowerCase().replace(/\s+/g, '')) {
+                        el.selectedIndex = i;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    el.value = '';
+                }
             };
 
             set('ec_sheet_row', this.getAttribute('data-sheetrow'));
@@ -1051,11 +1073,13 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
             set('ec_packet', this.getAttribute('data-packet'));
             set('ec_certfrom', this.getAttribute('data-certfrom'));
             set('ec_certto', this.getAttribute('data-certto'));
-            set('ec_location', this.getAttribute('data-location'));
+            sel('ec_location', this.getAttribute('data-location'));
             set('ec_remark', this.getAttribute('data-remark'));
             set('ec_receiver', this.getAttribute('data-receiver'));
             set('ec_desig', this.getAttribute('data-desig'));
             set('ec_mobile', this.getAttribute('data-mobile'));
+            set('ec_issuedby', this.getAttribute('data-issuedby'));
+            set('ec_image', this.getAttribute('data-image'));
             sel('ec_status', this.getAttribute('data-status'));
         });
     });
@@ -1076,10 +1100,10 @@ $canIssue     = \App\Services\AuthService::isAdmin(); // ADMIN+ can do bulk issu
             });
             const json = await res.json();
             if (json.success) {
-                alert('âœ… ' + (json.message || 'Saved to Google Sheet!'));
-                location.reload();
+                showToast(json.message || 'Saved to Google Sheet!', 'success');
+                setTimeout(() => location.reload(), 1200);
             } else {
-                alert('âŒ ' + (json.message || 'Save failed'));
+                showToast(json.message || 'Save failed', 'danger');
                 if (btn) {
                     btn.disabled = false;
                     btn.innerHTML = '<i class="fas fa-save me-2"></i>Save to Google Sheet';

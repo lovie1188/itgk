@@ -58,7 +58,7 @@ class GoogleSheetService
 
     public function getCertificateRange(): string
     {
-        return getenv('GSHEET_CERTIFICATE_RANGE') ?: 'Certificate!A1:V';
+        return getenv('GSHEET_CERTIFICATE_RANGE') ?: 'Certificate!A1:Z';
     }
 
     public function getStudentResultSheetId(): string
@@ -613,7 +613,69 @@ class GoogleSheetService
     }
 
     /**
-     * Fetch location options from tab "misc" range J2:J18
+     * Fetch status options from misc tab Column F
+     */
+    public function getStatusOptions(): array
+    {
+        try {
+            $sheetId = $this->getCertificateSheetId();
+            $rawRows = $this->fetchSheet($sheetId, 'misc');
+            if (empty($rawRows)) {
+                return ['Available', 'Issued', 'Not Received', 'InTransit'];
+            }
+            
+            $options = [];
+            foreach ($rawRows as $row) {
+                $val = trim((string)($row[5] ?? ''));
+                if ($val !== '') {
+                    $parts = preg_split('/\s+/', $val);
+                    foreach ($parts as $p) {
+                        $p = trim($p);
+                        if ($p !== '') {
+                            $options[] = $p;
+                        }
+                    }
+                }
+            }
+            return array_values(array_unique($options));
+        } catch (\Exception $e) {
+            return ['Available', 'Issued', 'Not Received', 'InTransit'];
+        }
+    }
+
+    /**
+     * Fetch district options from misc tab Column H
+     */
+    public function getDistrictOptions(): array
+    {
+        try {
+            $sheetId = $this->getCertificateSheetId();
+            $rawRows = $this->fetchSheet($sheetId, 'misc');
+            if (empty($rawRows)) {
+                return [];
+            }
+            
+            $options = [];
+            foreach ($rawRows as $row) {
+                $val = trim((string)($row[7] ?? ''));
+                if ($val !== '') {
+                    $parts = preg_split('/\s+/', $val);
+                    foreach ($parts as $p) {
+                        $p = trim($p);
+                        if ($p !== '') {
+                            $options[] = $p;
+                        }
+                    }
+                }
+            }
+            return array_values(array_unique($options));
+        } catch (\Exception $e) {
+            return [];
+        }
+    }
+
+    /**
+     * Fetch location options from tab "misc" Column J
      */
     public function getLocationOptions(): array
     {
@@ -625,18 +687,46 @@ class GoogleSheetService
             }
             
             $options = [];
-            // J2:J18 corresponds to row index 1 to 17 of rawRows
-            for ($i = 1; $i <= 17; $i++) {
-                if (isset($rawRows[$i])) {
-                    $val = trim((string)($rawRows[$i][9] ?? ''));
-                    if ($val !== '') {
+            foreach ($rawRows as $row) {
+                $val = trim((string)($row[9] ?? ''));
+                if ($val !== '') {
+                    if (strcasecmp($val, 'SP OFFICE OSIAN SP OFFICE JODHPUR Delivered to ITGK') === 0) {
+                        $options[] = 'SP OFFICE OSIAN';
+                        $options[] = 'SP OFFICE JODHPUR';
+                        $options[] = 'Delivered to ITGK';
+                    } else {
                         $options[] = $val;
                     }
                 }
             }
-            return $options;
+            return array_values(array_unique($options));
         } catch (\Exception $e) {
             Logger::error('Failed to fetch location options from misc sheet', ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
+
+    /**
+     * Fetch remark options from misc tab Column L
+     */
+    public function getRemarkOptions(): array
+    {
+        try {
+            $sheetId = $this->getCertificateSheetId();
+            $rawRows = $this->fetchSheet($sheetId, 'misc');
+            if (empty($rawRows)) {
+                return [];
+            }
+            
+            $options = [];
+            foreach ($rawRows as $row) {
+                $val = trim((string)($row[11] ?? ''));
+                if ($val !== '') {
+                    $options[] = $val;
+                }
+            }
+            return array_values(array_unique($options));
+        } catch (\Exception $e) {
             return [];
         }
     }
