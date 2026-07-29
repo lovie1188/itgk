@@ -1487,7 +1487,7 @@ class CertificateController extends BaseController
             'issueDate'    => $issueDate,
             'txnId'        => $txnId,
             'title'        => 'Certificate Issue Acknowledgement - SoftSam Portal',
-        ]);
+        ], false);
     }
 
     public function sendAckEmail(): void
@@ -1722,7 +1722,7 @@ class CertificateController extends BaseController
         ];
     }
 
-    private function validateCsrf(): void
+    protected function validateCsrf(): void
     {
         if (!Csrf::verify()) {
             $this->json(['success' => false, 'message' => 'Invalid CSRF token. Please refresh and try again.'], 403);
@@ -1731,7 +1731,7 @@ class CertificateController extends BaseController
     }
 
     /** Returns true if CSRF token is valid, false otherwise (used in methods that need JSON 403) */
-    private function verifyCsrf(): bool
+    protected function verifyCsrf(): bool
     {
         return Csrf::verify();
     }
