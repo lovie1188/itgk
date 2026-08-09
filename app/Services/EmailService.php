@@ -311,4 +311,82 @@ class EmailService
             return false;
         }
     }
+
+    /**
+     * Enqueue an email into the database queue for async processing
+     *
+     * @param string $toEmail Recipient email address
+     * @param string $subject Email subject
+     * @param string $body    HTML or plain text body
+     * @param bool   $isHtml  Whether body is HTML
+     * @return bool           Success state
+     */
+    public function enqueue(string $toEmail, string $subject, string $body, bool $isHtml = true): bool
+    {
+        try {
+            $db = \App\Core\Database::getInstance();
+            $db->insert('email_queue', [
+                'recipient_email' => $toEmail,
+                'subject' => $subject,
+                'body' => $body,
+                'is_html' => $isHtml ? 1 : 0,
+                'status' => 'pending'
+            ]);
+            Logger::info('Email enqueued successfully', ['to' => $toEmail, 'subject' => $subject]);
+            return true;
+        } catch (\Exception $e) {
+            Logger::error('Failed to enqueue email', ['error' => $e->getMessage(), 'to' => $toEmail]);
+            return false;
+        }
+    }
+
+    /**
+     * Process pending queued emails
+     *
+     * @param int $limit Number of emails to process per run
+     * @return int       Number of emails successfully processed
+     */
+    public function processQueue(int $limit = 10): int
+    {
+        $db = \App\Core\Database::getInstance();
+        $pending = $db->fetchAll(
+            "SELECT * FROM email_queue WHERE status = 'pending' ORDER BY id ASC LIMIT ?",
+            [$limit]
+        );
+
+        if (empty($pending)) {
+            return 0;
+        }
+
+        $sentCount = 0;
+        foreach ($pending as $item) {
+            try {
+                $mail = $this->getMailer();
+                $mail->addAddress($item['recipient_email']);
+                $mail->isHTML((bool)$item['is_html']);
+                $mail->Subject = $item['subject'];
+                $mail->Body = $item['body'];
+
+                $mail->send();
+
+                $db->update(
+                    'email_queue',
+                    ['status' => 'sent', 'sent_at' => date('Y-m-d H:i:s')],
+                    'id = ?',
+                    [$item['id']]
+                );
+                $sentCount++;
+            } catch (\Exception $e) {
+                Logger::error("Queue email send failed ID {$item['id']}", ['error' => $e->getMessage()]);
+                $db->update(
+                    'email_queue',
+                    ['status' => 'failed', 'error_message' => $e->getMessage()],
+                    'id = ?',
+                    [$item['id']]
+                );
+            }
+        }
+
+        return $sentCount;
+    }
 }

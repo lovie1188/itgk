@@ -34,10 +34,85 @@ $baseUrl = BASE_URL . 'learners/list';
     </div>
 </div>
 
+<!-- Filter Control Bar -->
+<div class="card border-0 shadow-sm mb-2 rounded-3" style="background:linear-gradient(135deg,#1e3a8a,#3b82f6);">
+    <div class="card-body py-2 px-2">
+        <form method="GET" action="<?= BASE_URL ?>learners/list" id="learnerFilterForm" class="row g-1 align-items-center">
+            <!-- Search Name / Code -->
+            <div class="col-12 col-sm-6 col-md-3">
+                <div class="position-relative">
+                    <i class="fas fa-search position-absolute text-white-50"
+                        style="left:10px;top:50%;transform:translateY(-50%);font-size:11px;pointer-events:none;"></i>
+                    <input type="search" name="search"
+                        class="form-control form-control-sm border-0 ps-4"
+                        placeholder="Search Name or Code..."
+                        value="<?= htmlspecialchars((string)($filters['search'] ?? '')) ?>"
+                        style="background:rgba(255,255,255,.18);color:#fff;font-size:11.5px;border-radius:20px;"
+                        autocomplete="off">
+                </div>
+            </div>
+
+            <!-- ITGK CODE Dropdown -->
+            <div class="col-6 col-sm-3 col-md-2">
+                <select name="itgk_code" class="form-select form-select-sm border-0 text-dark"
+                    style="font-size:11.5px;border-radius:20px;background:#fff;"
+                    onchange="this.form.submit()">
+                    <option value="">-- ITGK CODE --</option>
+                    <?php foreach ($itgkOptions as $opt): ?>
+                        <option value="<?= htmlspecialchars((string)$opt) ?>" <?= ($filters['itgk_code'] ?? '') === (string)$opt ? 'selected' : '' ?>>
+                            <?= htmlspecialchars((string)$opt) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <!-- Course Name Dropdown -->
+            <div class="col-6 col-sm-3 col-md-3">
+                <select name="course_name" class="form-select form-select-sm border-0 text-dark"
+                    style="font-size:11.5px;border-radius:20px;background:#fff;"
+                    onchange="this.form.submit()">
+                    <option value="">-- ALL COURSES --</option>
+                    <?php foreach ($courseOptions as $opt): ?>
+                        <option value="<?= htmlspecialchars((string)$opt) ?>" <?= ($filters['course_name'] ?? '') === (string)$opt ? 'selected' : '' ?>>
+                            <?= htmlspecialchars((string)$opt) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <!-- Exam Name Dropdown -->
+            <div class="col-8 col-sm-4 col-md-3">
+                <select name="exam_name" class="form-select form-select-sm border-0 text-dark"
+                    style="font-size:11.5px;border-radius:20px;background:#fff;"
+                    onchange="this.form.submit()">
+                    <option value="">-- ALL EXAMS --</option>
+                    <?php foreach ($examOptions as $opt): ?>
+                        <option value="<?= htmlspecialchars((string)$opt) ?>" <?= ($filters['exam_name'] ?? '') === (string)$opt ? 'selected' : '' ?>>
+                            <?= htmlspecialchars((string)$opt) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <!-- Filter Buttons -->
+            <div class="col-4 col-sm-2 col-md-1 d-flex gap-1">
+                <button type="submit" class="btn btn-light btn-sm w-100 fw-bold px-1" style="border-radius:20px;font-size:11px;" title="Apply Filter">
+                    <i class="fas fa-filter"></i>
+                </button>
+                <?php if (!empty($filters['search']) || !empty($filters['itgk_code']) || !empty($filters['course_name']) || !empty($filters['exam_name'])): ?>
+                    <a href="<?= BASE_URL ?>learners/list" class="btn btn-outline-light btn-sm py-0 px-2 flex-shrink-0" style="border-radius:20px;font-size:11px;" title="Reset Filters">
+                        <i class="fas fa-times"></i>
+                    </a>
+                <?php endif; ?>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Main Table Card -->
 <div class="card-modern">
     <div class="card-header py-2 d-flex justify-content-between align-items-center bg-primary text-white">
-        <h6 class="mb-0"><i class="fas fa-graduation-cap me-2"></i>Latest Learner Certificates (<?= number_format($total) ?> records)</h6>
+        <h6 class="mb-0"><i class="fas fa-graduation-cap me-2"></i>Learner Examination Results (<?= number_format($total) ?> records)</h6>
         <span class="badge bg-light text-dark">Google Sheet Live</span>
     </div>
     <div class="card-body p-0">
@@ -146,6 +221,16 @@ $baseUrl = BASE_URL . 'learners/list';
 
 
 
+<?php
+// Build pagination query string helper
+$filterParams = array_filter($filters ?? [], fn($v) => $v !== '');
+function buildPageUrl($baseUrl, $page, $limit, $params) {
+    $params['page'] = $page;
+    $params['limit'] = $limit;
+    return $baseUrl . '?' . http_build_query($params);
+}
+?>
+
 <!-- Pagination + Per Page Controls -->
 <?php if ($totalPages > 1 || $total > 50): ?>
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2 mb-3">
@@ -153,7 +238,7 @@ $baseUrl = BASE_URL . 'learners/list';
     <div class="d-flex align-items-center gap-2 small">
         <span class="text-muted">Records per page:</span>
         <?php foreach ([50, 100, 200, 500] as $opt): ?>
-            <a href="<?= $baseUrl ?>?page=1&limit=<?= $opt ?>"
+            <a href="<?= buildPageUrl($baseUrl, 1, $opt, $filterParams) ?>"
                class="btn btn-sm py-0 px-2 <?= ($limit === $opt) ? 'btn-primary' : 'btn-outline-secondary' ?>">
                 <?= $opt ?>
             </a>
@@ -168,10 +253,10 @@ $baseUrl = BASE_URL . 'learners/list';
     <nav>
         <ul class="pagination pagination-sm mb-0">
             <li class="page-item <?= ($currentPage <= 1) ? 'disabled' : '' ?>">
-                <a class="page-link" href="<?= $baseUrl ?>?page=1&limit=<?= $limit ?>"><i class="fas fa-angle-double-left"></i></a>
+                <a class="page-link" href="<?= buildPageUrl($baseUrl, 1, $limit, $filterParams) ?>"><i class="fas fa-angle-double-left"></i></a>
             </li>
             <li class="page-item <?= ($currentPage <= 1) ? 'disabled' : '' ?>">
-                <a class="page-link" href="<?= $baseUrl ?>?page=<?= $currentPage - 1 ?>&limit=<?= $limit ?>"><i class="fas fa-angle-left"></i></a>
+                <a class="page-link" href="<?= buildPageUrl($baseUrl, $currentPage - 1, $limit, $filterParams) ?>"><i class="fas fa-angle-left"></i></a>
             </li>
             <?php
             $start = max(1, $currentPage - 2);
@@ -179,15 +264,15 @@ $baseUrl = BASE_URL . 'learners/list';
             if ($start > 1): ?><li class="page-item disabled"><span class="page-link">…</span></li><?php endif;
             for ($p = $start; $p <= $end; $p++): ?>
                 <li class="page-item <?= ($p === $currentPage) ? 'active' : '' ?>">
-                    <a class="page-link" href="<?= $baseUrl ?>?page=<?= $p ?>&limit=<?= $limit ?>"><?= $p ?></a>
+                    <a class="page-link" href="<?= buildPageUrl($baseUrl, $p, $limit, $filterParams) ?>"><?= $p ?></a>
                 </li>
             <?php endfor;
             if ($end < $totalPages): ?><li class="page-item disabled"><span class="page-link">…</span></li><?php endif; ?>
             <li class="page-item <?= ($currentPage >= $totalPages) ? 'disabled' : '' ?>">
-                <a class="page-link" href="<?= $baseUrl ?>?page=<?= $currentPage + 1 ?>&limit=<?= $limit ?>"><i class="fas fa-angle-right"></i></a>
+                <a class="page-link" href="<?= buildPageUrl($baseUrl, $currentPage + 1, $limit, $filterParams) ?>"><i class="fas fa-angle-right"></i></a>
             </li>
             <li class="page-item <?= ($currentPage >= $totalPages) ? 'disabled' : '' ?>">
-                <a class="page-link" href="<?= $baseUrl ?>?page=<?= $totalPages ?>&limit=<?= $limit ?>"><i class="fas fa-angle-double-right"></i></a>
+                <a class="page-link" href="<?= buildPageUrl($baseUrl, $totalPages, $limit, $filterParams) ?>"><i class="fas fa-angle-double-right"></i></a>
             </li>
         </ul>
     </nav>

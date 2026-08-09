@@ -104,77 +104,88 @@ if (!defined('BASE_URL')) define('BASE_URL', getenv('BASE_URL') ?: '/certificate
     if (typeof firebase !== 'undefined' && firebaseConfig && firebaseConfig.apiKey) {
         firebase.initializeApp(firebaseConfig);
 
-        // Check for redirect result on page load
+        // ── Handle redirect result after Google sign-in returns ──────────
+        let isVerifying = false;
+        const processFirebaseUser = (user) => {
+            if (!user || isVerifying) return;
+            isVerifying = true;
+
+            const btnGoogle = document.getElementById('btnFirebaseGoogle');
+            if (btnGoogle) {
+                btnGoogle.disabled = true;
+                btnGoogle.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Verifying Google account...';
+            }
+            user.getIdToken().then((idToken) => {
+                return fetch('<?= BASE_URL ?>auth/firebase-verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id_token: idToken })
+                });
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.replace(data.redirect || '<?= BASE_URL ?>dashboard');
+                } else {
+                    isVerifying = false;
+                    alert('Authentication Error: ' + (data.message || 'Verification failed'));
+                    if (btnGoogle) {
+                        btnGoogle.disabled = false;
+                        btnGoogle.innerHTML = '<i class="fab fa-google me-2" style="color: #4285F4;"></i>Sign in with Google';
+                    }
+                }
+            })
+            .catch(err => {
+                isVerifying = false;
+                console.error('Firebase verify error:', err);
+                if (btnGoogle) {
+                    btnGoogle.disabled = false;
+                    btnGoogle.innerHTML = '<i class="fab fa-google me-2" style="color: #4285F4;"></i>Sign in with Google';
+                }
+            });
+        };
+
         firebase.auth().getRedirectResult().then((result) => {
             if (result && result.user) {
-                const btnGoogle = document.getElementById('btnFirebaseGoogle');
-                if (btnGoogle) {
-                    btnGoogle.disabled = true;
-                    btnGoogle.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Verifying Google account...';
-                }
-                result.user.getIdToken().then((idToken) => {
-                    return fetch('<?= BASE_URL ?>auth/firebase-verify', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ id_token: idToken })
-                    });
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        window.location.href = data.redirect || '<?= BASE_URL ?>dashboard';
-                    } else {
-                        alert('Authentication Error: ' + (data.message || 'Verification failed'));
+                processFirebaseUser(result.user);
+            } else {
+                firebase.auth().onAuthStateChanged((user) => {
+                    if (user) {
+                        processFirebaseUser(user);
                     }
                 });
             }
         }).catch((err) => {
-            console.error('Firebase redirect result error:', err);
+            if (err.code !== 'auth/no-current-user') {
+                console.error('Firebase redirect result error:', err);
+            }
         });
 
+        // ── Google Sign-In button: use signInWithPopup ─────────────────────
         const btnGoogle = document.getElementById('btnFirebaseGoogle');
         if (btnGoogle) {
             btnGoogle.addEventListener('click', function() {
                 const btn = this;
                 btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Connecting Google...';
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Opening Google...';
 
                 const provider = new firebase.auth.GoogleAuthProvider();
                 provider.setCustomParameters({ prompt: 'select_account' });
 
                 firebase.auth().signInWithPopup(provider)
-                    .then((result) => {
-                        return result.user.getIdToken();
-                    })
-                    .then((idToken) => {
-                        return fetch('<?= BASE_URL ?>auth/firebase-verify', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id_token: idToken })
-                        });
-                    })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.success) {
-                            window.location.href = data.redirect || '<?= BASE_URL ?>dashboard';
-                        } else {
-                            alert('Authentication Error: ' + (data.message || 'Verification failed'));
-                            btn.disabled = false;
-                            btn.innerHTML = '<i class="fab fa-google me-2" style="color: #4285F4;"></i>Sign in with Google';
-                        }
-                    })
-                    .catch((error) => {
-                        console.error('Firebase Auth error:', error);
-                        // If COOP or popup policy blocks window communication, fallback to redirect
-                        if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || (error.message && error.message.includes('Cross-Origin-Opener-Policy'))) {
-                            console.log('Switching to signInWithRedirect due to browser policy...');
-                            firebase.auth().signInWithRedirect(provider);
-                        } else {
-                            alert('Google Sign-In Error: ' + error.message);
-                            btn.disabled = false;
-                            btn.innerHTML = '<i class="fab fa-google me-2" style="color: #4285F4;"></i>Sign in with Google';
-                        }
-                    });
+                .then((result) => {
+                    if (result && result.user) {
+                        processFirebaseUser(result.user);
+                    }
+                })
+                .catch((error) => {
+                    console.error('Firebase Google Auth error:', error);
+                    if (error.code !== 'auth/popup-closed-by-user') {
+                        alert('Google Sign-In Error: ' + error.message);
+                    }
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fab fa-google me-2" style="color: #4285F4;"></i>Sign in with Google';
+                });
             });
         }
     }

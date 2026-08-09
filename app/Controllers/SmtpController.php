@@ -125,4 +125,23 @@ class SmtpController extends BaseController
             $this->json(['success' => false, 'message' => $e->getMessage()], 200);
         }
     }
+
+    /**
+     * Public Cron / Queue Runner action to process pending queued emails
+     */
+    public function processEmailQueue(): void
+    {
+        try {
+            $emailService = $this->getEmailService();
+            $processed = $emailService->processQueue(10);
+            $this->json([
+                'success' => true,
+                'message' => "Processed {$processed} email(s) from queue.",
+                'processed_count' => $processed
+            ]);
+        } catch (\Exception $e) {
+            Logger::error('Queue processing failed', ['error' => $e->getMessage()]);
+            $this->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
 }

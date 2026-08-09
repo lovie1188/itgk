@@ -28,6 +28,10 @@ class GoogleSheetService
             'id' => '16-aykoIV-uUWiqgh1xyhoQuC7zesJoko7uZCWCEDOXg',
             'sheet' => 'ITGK_2026'
         ],
+        'itgk_admissions' => [
+            'id' => '16-aykoIV-uUWiqgh1xyhoQuC7zesJoko7uZCWCEDOXg',
+            'sheet' => 'ADMISSIONS'
+        ],
         'itgk_certificate' => [
             'id' => '18fxE3NS6fT2Nkrgpw-pFFvLSIXIUD2mvSeCBiacJVv4',
             'sheet' => 'Certificate'
@@ -39,6 +43,10 @@ class GoogleSheetService
         'certificate_tracker' => [
             'id' => '18fxE3NS6fT2Nkrgpw-pFFvLSIXIUD2mvSeCBiacJVv4',
             'sheet' => 'Dispach_register'
+        ],
+        'books_management' => [
+            'id' => '18fxE3NS6fT2Nkrgpw-pFFvLSIXIUD2mvSeCBiacJVv4',
+            'sheet' => 'Book_Issue'
         ]
     ];
 
@@ -91,6 +99,40 @@ class GoogleSheetService
         return getenv('GSHEET_ITGK_MASTER_RANGE') ?: 'ITGK!A1:R131';
     }
 
+    public function getItgk2026SheetId(): string
+    {
+        return getenv('GSHEET_ITGK_2026_ID') ?: '16-aykoIV-uUWiqgh1xyhoQuC7zesJoko7uZCWCEDOXg';
+    }
+
+    public function getItgk2026Tab(): string
+    {
+        return getenv('GSHEET_ITGK_2026_TAB') ?: 'ITGK_2026';
+    }
+
+    public function getItgk2026Range(): string
+    {
+        return getenv('GSHEET_ITGK_2026_RANGE') ?: 'ITGK_2026!A1:Z';
+    }
+
+    // ----------------------------------------------------------------
+    // ITGK Admissions helpers
+    // ----------------------------------------------------------------
+
+    public function getAdmissionsSheetId(): string
+    {
+        return getenv('GSHEET_ITGK_ADMISSIONS_ID') ?: '16-aykoIV-uUWiqgh1xyhoQuC7zesJoko7uZCWCEDOXg';
+    }
+
+    public function getAdmissionsTab(): string
+    {
+        return getenv('GSHEET_ITGK_ADMISSIONS_TAB') ?: 'ADMISSIONS';
+    }
+
+    public function getAdmissionsRange(): string
+    {
+        return getenv('GSHEET_ITGK_ADMISSIONS_RANGE') ?: 'ADMISSIONS!A1:S';
+    }
+
     // ----------------------------------------------------------------
     // Certificate Tracker (Dispatch Register) helpers
     // ----------------------------------------------------------------
@@ -108,6 +150,25 @@ class GoogleSheetService
     public function getCertTrackerRange(): string
     {
         return getenv('GSHEET_CERT_TRACKER_RANGE') ?: 'Dispach_register!A1:Z500';
+    }
+
+    // ----------------------------------------------------------------
+    // Books Management helpers
+    // ----------------------------------------------------------------
+
+    public function getBooksSheetId(): string
+    {
+        return getenv('GSHEET_BOOKS_ID') ?: '18fxE3NS6fT2Nkrgpw-pFFvLSIXIUD2mvSeCBiacJVv4';
+    }
+
+    public function getBooksTab(): string
+    {
+        return getenv('GSHEET_BOOKS_TAB') ?: 'Book_Issue';
+    }
+
+    public function getBooksRange(): string
+    {
+        return getenv('GSHEET_BOOKS_RANGE') ?: 'Book_Issue!A1:Z';
     }
 
     // ----------------------------------------------------------------
@@ -145,6 +206,11 @@ class GoogleSheetService
             if (empty($range) || $range === 'Sheet1!A1:Z') {
                 $range = $this->getItgkMasterRange();
             }
+        } elseif ($key === 'books_management' || $key === 'books') {
+            $spreadsheetId = $this->getBooksSheetId();
+            if (empty($range) || $range === 'Sheet1!A1:Z') {
+                $range = $this->getBooksRange();
+            }
         } elseif (isset($this->presetSheets[$key])) {
             $spreadsheetId = $this->presetSheets[$key]['id'];
             $sheetName = $this->presetSheets[$key]['sheet'];
@@ -166,7 +232,28 @@ class GoogleSheetService
             urlencode($sheetName)
         );
 
-        Logger::info('Fetching Google Sheet (full tab)', [
+        // ── Data Caching Layer (120 seconds TTL for fast responses) ────────
+        $cacheDir = __DIR__ . '/../../storage/cache';
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0777, true);
+        }
+        $cacheKey = 'gsheet_' . md5($spreadsheetId . '_' . $sheetName) . '.cache';
+        $cacheFile = $cacheDir . '/' . $cacheKey;
+        $cacheTTL = (int)(getenv('GSHEET_CACHE_TTL') ?: 120);
+
+        if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $cacheTTL) {
+            $cachedCsv = @file_get_contents($cacheFile);
+            if (!empty($cachedCsv)) {
+                Logger::info('Serving Google Sheet from local cache', [
+                    'spreadsheet_id' => $spreadsheetId,
+                    'sheet_name' => $sheetName,
+                    'age_sec' => (time() - filemtime($cacheFile)),
+                ]);
+                return $this->parseCsvData($cachedCsv);
+            }
+        }
+
+        Logger::info('Fetching Google Sheet from live API', [
             'spreadsheet_id' => $spreadsheetId,
             'sheet_name' => $sheetName,
             'url' => $csvUrl,
@@ -196,7 +283,27 @@ class GoogleSheetService
             throw new ValidationException("Failed to fetch Google Sheet (HTTP {$httpCode}). Ensure sheet is shared publicly with 'Anyone with the link'.");
         }
 
+        // Save fresh data to local cache
+        @file_put_contents($cacheFile, $csvData);
+
         return $this->parseCsvData($csvData);
+    }
+
+    /**
+     * Clear all cached Google Sheet files (called upon write/edit/issue operations)
+     */
+    public function clearCache(): void
+    {
+        $cacheDir = __DIR__ . '/../../storage/cache';
+        if (is_dir($cacheDir)) {
+            $files = glob($cacheDir . '/gsheet_*.cache');
+            if ($files) {
+                foreach ($files as $f) {
+                    @unlink($f);
+                }
+            }
+            Logger::info('Google Sheet cache cleared completely');
+        }
     }
 
     // ----------------------------------------------------------------
@@ -332,19 +439,25 @@ class GoogleSheetService
             throw new \RuntimeException('Invalid service account JSON');
         }
 
-        $now = time();
+        // ── Clock-skew fix ──────────────────────────────────────────────
+        // Local PHP time() may be behind real UTC (Windows clock drift).
+        // Fetch current Unix timestamp from Google's own token endpoint
+        // (HEAD request returns "Date:" header) so iat/exp are always valid.
+        $now = $this->getGoogleServerTime();
+        // ────────────────────────────────────────────────────────────────
+
         $header = base64_encode(json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
-        $claim = base64_encode(json_encode([
-            'iss' => $sa['client_email'],
+        $claim  = base64_encode(json_encode([
+            'iss'   => $sa['client_email'],
             'scope' => 'https://www.googleapis.com/auth/spreadsheets',
-            'aud' => 'https://oauth2.googleapis.com/token',
-            'iat' => $now,
-            'exp' => $now + 3600,
+            'aud'   => 'https://oauth2.googleapis.com/token',
+            'iat'   => $now - 10,      // 10-second leeway for minor drift
+            'exp'   => $now + 3590,    // just under 1 hour
         ]));
 
         // URL-safe base64
         $header = rtrim(strtr($header, '+/', '-_'), '=');
-        $claim = rtrim(strtr($claim, '+/', '-_'), '=');
+        $claim  = rtrim(strtr($claim,  '+/', '-_'), '=');
 
         $toSign = $header . '.' . $claim;
         openssl_sign($toSign, $signature, $sa['private_key'], 'SHA256');
@@ -355,17 +468,17 @@ class GoogleSheetService
         // Exchange JWT for access token
         $ch = curl_init('https://oauth2.googleapis.com/token');
         curl_setopt_array($ch, [
-            CURLOPT_POST => true,
+            CURLOPT_POST           => true,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POSTFIELDS => http_build_query([
+            CURLOPT_POSTFIELDS     => http_build_query([
                 'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                'assertion' => $jwt,
+                'assertion'  => $jwt,
             ]),
             CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded'],
-            CURLOPT_TIMEOUT => 15,
+            CURLOPT_TIMEOUT    => 20,
         ]);
         $resp = curl_exec($ch);
-        $err = curl_error($ch);
+        $err  = curl_error($ch);
         curl_close($ch);
 
         if ($err) {
@@ -378,6 +491,45 @@ class GoogleSheetService
         }
 
         return $data['access_token'];
+    }
+
+    /**
+     * Get current UTC Unix timestamp from Google's token endpoint Date header.
+     * This compensates for Windows / XAMPP clock drift without requiring NTP.
+     * Falls back to local time() if the request fails.
+     */
+    private function getGoogleServerTime(): int
+    {
+        $ch = curl_init('https://oauth2.googleapis.com/token');
+        curl_setopt_array($ch, [
+            CURLOPT_NOBODY         => true,   // HEAD-like: only headers
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HEADER         => true,
+            CURLOPT_TIMEOUT        => 8,
+            CURLOPT_SSL_VERIFYPEER => false,
+        ]);
+        $resp = curl_exec($ch);
+        $err  = curl_error($ch);
+        curl_close($ch);
+
+        if (!$err && $resp) {
+            // Parse "Date: Thu, 31 Jul 2026 03:30:00 GMT" header
+            if (preg_match('/^Date:\s*(.+)$/mi', $resp, $m)) {
+                $ts = strtotime(trim($m[1]));
+                if ($ts && $ts > 0) {
+                    Logger::info('JWT clock-sync: using Google server time', [
+                        'google_utc' => gmdate('Y-m-d H:i:s', $ts),
+                        'local_utc'  => gmdate('Y-m-d H:i:s'),
+                        'drift_sec'  => ($ts - time()),
+                    ]);
+                    return $ts;
+                }
+            }
+        }
+
+        // Fallback to local time (will work if clock is in sync)
+        Logger::warn('JWT clock-sync: could not fetch Google server time, using local time()', []);
+        return time();
     }
 
     /**
@@ -466,6 +618,8 @@ class GoogleSheetService
             $msg = json_decode($resp, true)['error']['message'] ?? $resp;
             throw new \RuntimeException("Sheets API error ({$status}): {$msg}");
         }
+
+        $this->clearCache();
     }
 
     /**
@@ -521,6 +675,8 @@ class GoogleSheetService
             $msg = json_decode($resp, true)['error']['message'] ?? $resp;
             throw new \RuntimeException("Sheets API batchUpdate error ({$status}): {$msg}");
         }
+
+        $this->clearCache();
     }
 
     /**
@@ -535,10 +691,16 @@ class GoogleSheetService
     {
         $token = $this->getAccessToken();
 
+        // Extract clean tab name if a range notation like "Book_Issue!A1:Z" was passed
+        $tabName = $tab;
+        if (strpos($tab, '!') !== false) {
+            [$tabName] = explode('!', $tab, 2);
+        }
+
         $url = 'https://sheets.googleapis.com/v4/spreadsheets/'
             . urlencode($sheetId)
             . '/values/'
-            . urlencode("{$tab}!A1:Z")
+            . urlencode("{$tabName}!A:Z")
             . ':append?valueInputOption=' . urlencode($valueOption);
 
         $body = json_encode([
@@ -569,6 +731,8 @@ class GoogleSheetService
             $msg = json_decode($resp, true)['error']['message'] ?? $resp;
             throw new \RuntimeException("Sheets API append error ({$status}): {$msg}");
         }
+
+        $this->clearCache();
     }
 
     /**

@@ -12,3 +12,9 @@ transcript*.jsonl
 task.md
 implementation_plan.md
 walkthrough.md
+soft_sam.sql
+storage/
+.phpunit.cache/
+.playwright-mcp/
+upload/
+

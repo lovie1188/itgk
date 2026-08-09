@@ -1,0 +1,21 @@
+{
+  "short_name": "ITGK Portal",
+  "name": "ITGK Management System",
+  "icons": [
+    {
+      "src": "assets/img/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "assets/img/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/certificate/dashboard",
+  "background_color": "#1e3a8a",
+  "theme_color": "#1e3a8a",
+  "display": "standalone",
+  "orientation": "portrait"
+}

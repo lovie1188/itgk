@@ -178,11 +178,15 @@ class FirebaseService
 
         // Check if user exists in local database by email or firebase_uid
         $localUser = $this->db->fetch(
-            "SELECT u.*, r.name as role_name, r.id as role_id 
+            "SELECT u.*, r.name as role_name, r.id as role_id,
+                    o.id as office_id, o.name as office_name
              FROM users u
              LEFT JOIN user_roles ur ON u.id = ur.user_id
              LEFT JOIN roles r ON ur.role_id = r.id
-             WHERE u.email = ? OR u.firebase_uid = ? LIMIT 1",
+             LEFT JOIN employee_office_map eom ON u.id = eom.user_id
+             LEFT JOIN offices o ON eom.office_id = o.id
+             WHERE u.email = ? OR u.firebase_uid = ? 
+             ORDER BY eom.id DESC LIMIT 1",
             [$email, $uid]
         );
 
@@ -230,11 +234,15 @@ class FirebaseService
             }
 
             $localUser = $this->db->fetch(
-                "SELECT u.*, r.name as role_name, r.id as role_id 
+                "SELECT u.*, r.name as role_name, r.id as role_id,
+                        o.id as office_id, o.name as office_name 
                  FROM users u
                  LEFT JOIN user_roles ur ON u.id = ur.user_id
                  LEFT JOIN roles r ON ur.role_id = r.id
-                 WHERE u.id = ?",
+                 LEFT JOIN employee_office_map eom ON u.id = eom.user_id
+                 LEFT JOIN offices o ON eom.office_id = o.id
+                 WHERE u.id = ? 
+                 ORDER BY eom.id DESC LIMIT 1",
                 [$newUserId]
             );
         }
@@ -260,19 +268,25 @@ class FirebaseService
         $roleName = strtoupper($localUser['role_name'] ?? $localUser['role'] ?? 'PARTNER');
 
         $_SESSION['user_id'] = $localUser['id'];
+        $_SESSION['username'] = $localUser['username'];
+        $_SESSION['email'] = $localUser['email'];
+        $_SESSION['name'] = trim(($localUser['first_name'] ?? '') . ' ' . ($localUser['last_name'] ?? '')) ?: $localUser['username'];
+        $_SESSION['role'] = $roleName;
         $_SESSION['user'] = [
             'id' => $localUser['id'],
             'username' => $localUser['username'],
             'first_name' => $localUser['first_name'],
             'last_name' => $localUser['last_name'],
+            'name' => $_SESSION['name'],
             'email' => $localUser['email'],
             'mobile' => $localUser['mobile'] ?? '',
+            'designation' => $localUser['designation'] ?? null,
+            'office_id' => $localUser['office_id'] ?? null,
+            'office_name' => $localUser['office_name'] ?? null,
             'role_name' => $roleName,
             'role_id' => $roleId,
             'permissions' => $permissions
         ];
-        $_SESSION['role'] = $roleName;
-        $_SESSION['name'] = trim(($localUser['first_name'] ?? '') . ' ' . ($localUser['last_name'] ?? '')) ?: $localUser['username'];
         $_SESSION['login_time'] = time();
 
         Logger::info('User authenticated via Firebase', [

@@ -20,6 +20,8 @@ use App\Helpers\Csrf;
 use App\Services\AuthService;
 use App\Services\EmailService;
 use App\Services\GoogleSheetService;
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception as MailException;
 
 class CertificateController extends BaseController
 {
@@ -216,6 +218,7 @@ class CertificateController extends BaseController
                 'absent'          => 7,   // H - ABSENT
                 'fail'            => 8,   // I - FAIL
                 'pass'            => 9,   // J - PASS
+                'ufm'             => 10,  // K - UFM
                 'grand_total'     => 11,  // L - Grand Total
                 'packet_no'       => 12,  // M - Packet No.
                 'cert_no_from'    => 13,  // N - Cert No. From
@@ -414,7 +417,7 @@ class CertificateController extends BaseController
                 $sheetService->batchUpdateRows($certSheetId, $certUpdates);
             }
 
-            // â”€â”€ 2. Update Student_Result (Learner) rows â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ── 2. Update Student_Result (Learner) rows ──────────────
             // Fetch full Student_Result sheet, find matching rows by
             // ITGK Code + Course Name + Exam Name, batch-update Status col.
             $srData    = $sheetService->fetchParsedSheet($srSheetId, $sheetService->getStudentResultRange());
@@ -422,7 +425,16 @@ class CertificateController extends BaseController
             $srRows    = $srData['rows']    ?? [];
             $srStartRow = (int)($srData['startRow'] ?? 2);
 
-            // Build lookup keys from VALID selections (both exact name and extracted date)
+            // Detect Status column index in Student_Result sheet
+            $statusColIdx = null;
+            foreach ($srHeaders as $ci => $hdr) {
+                if (strcasecmp(trim($hdr), 'Status') === 0) {
+                    $statusColIdx = $ci;
+                    break;
+                }
+            }
+
+            // Build lookup keys from VALID selections
             $selectionKeys = [];
             foreach ($validSelections as $valid) {
                 $sel = $valid['sel_data'];
@@ -430,7 +442,11 @@ class CertificateController extends BaseController
                 $course = strtolower(trim((string)($sel['course_name'] ?? '')));
                 $exam = strtolower(trim((string)($sel['exam_name'] ?? '')));
                 
-                $selectionKeys["$itgk|||$course|||$exam"] = true;
+                if ($itgk !== '') {
+                    $selectionKeys["$itgk|||$course|||$exam"] = true;
+                    $selectionKeys["$itgk|||$course"] = true; // Fallback match by ITGK + Course
+                    $selectionKeys["$itgk"] = true; // Fallback match by ITGK alone
+                }
                 
                 if (preg_match('/\((\d{2}-\d{2}-\d{4})\)/', $exam, $m)) {
                     $dateSlash = str_replace('-', '/', $m[1]);
@@ -440,15 +456,19 @@ class CertificateController extends BaseController
 
             $learnerUpdates = [];
             foreach ($srRows as $rowOffset => $r) {
-                $itgk   = strtolower(trim((string)($r['ITGK Code']   ?? $r['ITGK CODE'] ?? '')));
+                $itgk   = strtolower(trim((string)($r['ITGK Code']   ?? $r['ITGK CODE'] ?? $r['Statu'] ?? '')));
                 $course = strtolower(trim((string)($r['Course Name']  ?? '')));
                 $exam   = strtolower(trim((string)($r['Exam Name']    ?? $r['exam_name on certificate'] ?? $r['BATCH'] ?? '')));
                 $heldDate = str_replace('-', '/', strtolower(trim((string)($r['exam_held_date'] ?? ''))));
                 
                 $matchFound = false;
-                if (isset($selKeys["$itgk|||$course|||$exam"])) {
+                if (isset($selectionKeys["$itgk|||$course|||$exam"])) {
                     $matchFound = true;
-                } elseif ($heldDate !== '' && isset($selKeys["$itgk|||$course|||$heldDate"])) {
+                } elseif ($heldDate !== '' && isset($selectionKeys["$itgk|||$course|||$heldDate"])) {
+                    $matchFound = true;
+                } elseif (isset($selectionKeys["$itgk|||$course"])) {
+                    $matchFound = true;
+                } elseif (isset($selectionKeys["$itgk"])) {
                     $matchFound = true;
                 }
 
@@ -630,9 +650,8 @@ class CertificateController extends BaseController
         }
 
         if (!$this->isApiRequest()) {
-            $token = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
-            if (empty($token) || !hash_equals($_SESSION['csrf_token'] ?? '', $token)) {
-                $result = ['success' => false, 'message' => 'Invalid CSRF token'];
+            if (!Csrf::verify()) {
+                $result = ['success' => false, 'message' => 'Invalid or expired CSRF token. Please refresh and try again.'];
                 $this->json($result, 400);
                 return null;
             }
@@ -646,27 +665,108 @@ class CertificateController extends BaseController
             $sheetId      = $sheetService->getCertificateSheetId();
             $tab          = $sheetService->getCertificateTab();
 
-            // Build row data matching sheet column order
-            $headers = ['S. No.', 'Course Name', 'DATE', 'EXAM', 'EXAM_DATE_ITGK', 'ITGK CODE', 'DISTRICT', 'ABSENT', 'FAIL', 'PASS', 'UFM', 'Grand Total', 'Packet No.', 'Cert No. From', 'Cert No. To', 'Current Location', 'STATUS', 'Remark', 'Receiver Name', 'Receiver Designation', 'Receiver Mobile Number', 'Image'];
-            $row = [];
-            foreach ($headers as $h) {
-                $row[] = $sanitized[$h] ?? '';
-            }
+            // Build row matching Certificate sheet column order (A–V, 22 cols)
+            // sanitizeCertificateData() returns snake_case keys — map to column order here
+            $row = [
+                '',                                  // A: S. No. (auto / leave blank)
+                $sanitized['course_name'],           // B: Course Name
+                $sanitized['receiving_date'],        // C: DATE
+                $sanitized['exam_name'],             // D: EXAM
+                $sanitized['exam_date'],             // E: EXAM_DATE_ITGK
+                $sanitized['itgk_code'],             // F: ITGK CODE
+                $sanitized['district'],              // G: DISTRICT
+                $sanitized['absent'],                // H: ABSENT
+                $sanitized['fail'],                  // I: FAIL
+                $sanitized['pass'],                  // J: PASS
+                $sanitized['ufm'],                   // K: UFM
+                $sanitized['grand_total'],           // L: Grand Total
+                $sanitized['packet_no'],             // M: Packet No.
+                $sanitized['cert_no_from'],          // N: Certificate No. From
+                $sanitized['cert_no_to'],            // O: Certificate No. To
+                $sanitized['current_location'],      // P: Current Location
+                $sanitized['status'] ?: 'Available', // Q: STATUS
+                $sanitized['remark'],                // R: Remark
+                '',                                  // S: Receiver Name
+                '',                                  // T: Receiver Designation
+                '',                                  // U: Receiver Mobile Number
+                '',                                  // V: Image
+            ];
 
+            // 1. Append parent certificate record
             $sheetService->appendRow($sheetId, $tab, [$row]);
 
-            $certCount = count(array_filter(
-                $sheetService->fetchParsedSheet($sheetId, $sheetService->getCertificateRange())['rows'] ?? [],
-                fn($r) => !empty(array_filter($r, fn($v) => trim($v) !== ''))
-            ));
-
             Logger::info('Certificate packet appended to Google Sheet', [
-                'itgk_code' => $sanitized['itgk_code'] ?? '',
-                'user_id'   => AuthService::id()
+                'itgk_code' => $sanitized['itgk_code'],
+                'user_id'   => AuthService::id(),
             ]);
 
-            $result = ['success' => true, 'message' => 'Certificate Packet Created Successfully in Google Sheet'];
-            $this->json($result, 201);
+            // 2. Append blank child learner records to Student_Result sheet (one per Pass count)
+            $passCount        = (int)($sanitized['pass'] ?? 0);
+            $learnersAppended = 0;
+
+            if ($passCount > 0) {
+                try {
+                    $srSheetId = $sheetService->getStudentResultSheetId();
+                    $srTab     = $sheetService->getStudentResultTab();
+
+                    // Fetch headers to understand current Student_Result column layout
+                    $srData    = $sheetService->fetchParsedSheet($srSheetId, $sheetService->getStudentResultRange());
+                    $srHeaders = $srData['headers'] ?? [];
+
+                    // Build a blank row with only the linkable fields pre-filled
+                    // Columns: ITGK Code, Course Name, Exam Name, Learner Code, Learner Name,
+                    //          District, Result, Exam Held Date, Packet No, Status
+                    $learnerRows = [];
+                    for ($i = 0; $i < $passCount; $i++) {
+                        $learnerRow = [];
+                        foreach ($srHeaders as $col) {
+                            $colLower = strtolower(trim($col));
+                            if (in_array($colLower, ['itgk code', 'itgk_code'])) {
+                                $learnerRow[] = $sanitized['itgk_code'];
+                            } elseif ($colLower === 'course name') {
+                                $learnerRow[] = $sanitized['course_name'];
+                            } elseif (in_array($colLower, ['exam name', 'exam_name on certificate', 'batch'])) {
+                                $learnerRow[] = $sanitized['exam_name'];
+                            } elseif (in_array($colLower, ['exam date', 'exam_date', 'exam held date', 'exam_held_date', 'date'])) {
+                                $learnerRow[] = $sanitized['exam_date'];
+                            } elseif (in_array($colLower, ['district'])) {
+                                $learnerRow[] = $sanitized['district'];
+                            } elseif (in_array($colLower, ['packet no.', 'packet no', 'packet_no'])) {
+                                $learnerRow[] = $sanitized['packet_no'];
+                            } elseif (in_array($colLower, ['result'])) {
+                                $learnerRow[] = 'PASS';
+                            } elseif (in_array($colLower, ['status'])) {
+                                $learnerRow[] = 'Available';
+                            } else {
+                                $learnerRow[] = ''; // blank for remaining columns
+                            }
+                        }
+                        $learnerRows[] = $learnerRow;
+                    }
+
+                    if (!empty($learnerRows)) {
+                        $sheetService->appendRow($srSheetId, $srTab, $learnerRows);
+                        $learnersAppended = count($learnerRows);
+                    }
+
+                    Logger::info('Blank learner records appended to Student_Result', [
+                        'itgk_code'        => $sanitized['itgk_code'],
+                        'learners_created' => $learnersAppended,
+                    ]);
+                } catch (\Exception $srEx) {
+                    // Non-fatal: certificate was already saved, log and continue
+                    Logger::warn('Failed to append learner records to Student_Result sheet', [
+                        'error' => $srEx->getMessage(),
+                    ]);
+                }
+            }
+
+            $msg = 'Certificate Packet added to Google Sheet successfully!';
+            if ($learnersAppended > 0) {
+                $msg .= " {$learnersAppended} blank learner record(s) created in Student_Result sheet.";
+            }
+
+            $this->json(['success' => true, 'message' => $msg], 201);
             return null;
         } catch (\Exception $e) {
             Logger::error('Failed to create certificate packet in Google Sheet', ['error' => $e->getMessage()]);
@@ -915,15 +1015,18 @@ class CertificateController extends BaseController
                     continue;
                 }
 
-                // Check current status (look for STATUS column)
-                $statusColIdx = array_search('STATUS', $certHeaders);
-                if ($statusColIdx === false) {
-                    $statusColIdx = array_search('Status', $certHeaders);
+                // Check current status (look for STATUS column case-insensitively)
+                $statusColIdx = false;
+                foreach ($certHeaders as $chi => $chName) {
+                    if (strcasecmp(trim((string)$chName), 'status') === 0) {
+                        $statusColIdx = $chi;
+                        break;
+                    }
                 }
 
                 if ($statusColIdx !== false) {
                     $currentStatus = trim((string)($row[$certHeaders[$statusColIdx]] ?? 'Available'));
-                    if (strcasecmp($currentStatus, 'Issued') === 0 || strcasecmp($currentStatus, 'ISSUED') === 0) {
+                    if (strcasecmp($currentStatus, 'Issued') === 0) {
                         $invalidRows[] = 'Row ' . $sheetRow . ' is already ISSUED (status: ' . $currentStatus . ')';
                         continue;
                     }
@@ -970,18 +1073,38 @@ class CertificateController extends BaseController
                     $updateRow[$ci] = $row[$h] ?? '';
                 }
 
-                $idxQ = array_search('STATUS', $certHeaders);
-                $idxR = array_search('Remark', $certHeaders);
-                $idxS = array_search('Receiver Name', $certHeaders);
-                $idxT = array_search('Receiver Designation', $certHeaders);
-                $idxU = array_search('Receiver Mobile Number', $certHeaders);
-                $idxV = array_search('Image', $certHeaders);
+                $idxQ = $idxR = $idxS = $idxT = $idxU = $idxV = $idxG = $idxM = $idxN = $idxO = false;
+                foreach ($certHeaders as $ci => $h) {
+                    $hNorm = strtolower(trim((string)$h));
+                    if ($hNorm === 'status') $idxQ = $ci;
+                    elseif ($hNorm === 'remark') $idxR = $ci;
+                    elseif ($hNorm === 'receiver name') $idxS = $ci;
+                    elseif ($hNorm === 'receiver designation') $idxT = $ci;
+                    elseif ($hNorm === 'receiver mobile number' || $hNorm === 'receiver mobile') $idxU = $ci;
+                    elseif ($hNorm === 'image') $idxV = $ci;
+                    elseif ($hNorm === 'district') $idxG = $ci;
+                    elseif ($hNorm === 'packet no.' || $hNorm === 'packet no' || $hNorm === 'packet_no') $idxM = $ci;
+                    elseif (str_contains($hNorm, 'certificate no. from') || str_contains($hNorm, 'cert_no_from')) $idxN = $ci;
+                    elseif (str_contains($hNorm, 'certificate no. to') || str_contains($hNorm, 'cert_no_to')) $idxO = $ci;
+                }
+                $issuerOfficeName = trim((string)($currentUser['office_name'] ?? $currentUser['office'] ?? 'HEAD OFFICE'));
                 if ($idxQ !== false) $updateRow[$idxQ] = 'ISSUED';
                 if ($idxR !== false) $updateRow[$idxR]  = $remark;
                 if ($idxS !== false) $updateRow[$idxS]  = $receiverName;
                 if ($idxT !== false) $updateRow[$idxT]  = $receiverDesig;
                 if ($idxU !== false) $updateRow[$idxU]  = $receiverMob;
-                if ($idxV !== false) $updateRow[$idxV]  = "Issued by: {$issuerName} ({$issuerDesig}) | Mob: {$issuerMobile} | on {$issueDate}";
+                if ($idxV !== false) $updateRow[$idxV]  = "Issued by: {$issuerName} ({$issuerDesig}) | Office: {$issuerOfficeName} | Mob: {$issuerMobile} | on {$issueDate}";
+
+                // Update District (Section 1), Packet No, Cert From, Cert To (Section 2) if passed from offcanvas
+                $selDistrict = trim((string)($sel['district'] ?? ''));
+                $selPacket   = trim((string)($sel['packet_no'] ?? ''));
+                $selCertFrom = trim((string)($sel['cert_no_from'] ?? ''));
+                $selCertTo   = trim((string)($sel['cert_no_to'] ?? ''));
+
+                if ($idxG !== false && $selDistrict !== '') $updateRow[$idxG] = $selDistrict;
+                if ($idxM !== false && $selPacket !== '')   $updateRow[$idxM] = $selPacket;
+                if ($idxN !== false && $selCertFrom !== '') $updateRow[$idxN] = $selCertFrom;
+                if ($idxO !== false && $selCertTo !== '')   $updateRow[$idxO] = $selCertTo;
 
                 $startCol = $this->colIndexToLetter(0);
                 $endCol   = $this->colIndexToLetter(count($certHeaders) - 1);
@@ -1034,25 +1157,15 @@ class CertificateController extends BaseController
                 $course = strtolower(trim((string)($row['Course Name'] ?? '')));
                 $exam   = strtolower(trim((string)($row['EXAM'] ?? $row['Exam Name'] ?? '')));
                 
-                $selKeys["$itgk|||$course|||$exam"] = true;
+                if ($itgk !== '') {
+                    $selKeys["$itgk|||$course|||$exam"] = true;
+                    $selKeys["$itgk|||$course"] = true;
+                    $selKeys["$itgk"] = true;
+                }
                 
                 if (preg_match('/\((\d{2}-\d{2}-\d{4})\)/', $exam, $m)) {
                     $dateSlash = str_replace('-', '/', $m[1]);
                     $selKeys["$itgk|||$course|||$dateSlash"] = true;
-                }
-            }
-
-            // Also match by sheet_row certificate data for each selected row
-            foreach ($selections as $sel) {
-                $sheetRow = (int)($sel['sheet_row'] ?? 0);
-                if ($sheetRow <= 0 || !isset($certByRow[$sheetRow])) continue;
-                $row = $certByRow[$sheetRow];
-                $itgk   = strtolower(trim((string)($row['ITGK CODE'] ?? $row['ITGK Code'] ?? '')));
-                $course = strtolower(trim((string)($row['Course Name'] ?? '')));
-                $exam   = strtolower(trim((string)($row['EXAM'] ?? $row['Exam Name'] ?? '')));
-                $key = "{$itgk}|||{$course}|||{$exam}";
-                if ($itgk !== '' && $course !== '' && $exam !== '') {
-                    $selKeys[$key] = true;
                 }
             }
 
@@ -1066,11 +1179,23 @@ class CertificateController extends BaseController
 
             $learnerUpdates = [];
             foreach ($srRows as $rowOffset => $r) {
-                $itgk   = strtolower(trim((string)($r['ITGK Code']   ?? $r['ITGK CODE'] ?? '')));
+                $itgk   = strtolower(trim((string)($r['ITGK Code']   ?? $r['ITGK CODE'] ?? $r['Statu'] ?? '')));
                 $course = strtolower(trim((string)($r['Course Name']  ?? '')));
                 $exam   = strtolower(trim((string)($r['Exam Name']    ?? $r['exam_name on certificate'] ?? $r['BATCH'] ?? '')));
-                $key    = "{$itgk}|||{$course}|||{$exam}";
-                if (!isset($selKeys[$key])) continue;
+                $heldDate = str_replace('-', '/', strtolower(trim((string)($r['exam_held_date'] ?? ''))));
+                
+                $matchFound = false;
+                if (isset($selKeys["$itgk|||$course|||$exam"])) {
+                    $matchFound = true;
+                } elseif ($heldDate !== '' && isset($selKeys["$itgk|||$course|||$heldDate"])) {
+                    $matchFound = true;
+                } elseif (isset($selKeys["$itgk|||$course"])) {
+                    $matchFound = true;
+                } elseif (isset($selKeys["$itgk"])) {
+                    $matchFound = true;
+                }
+
+                if (!$matchFound) continue;
 
                 $actualRow = $srStartRow + $rowOffset;
                 if ($statusColIdx !== null) {
@@ -1087,7 +1212,26 @@ class CertificateController extends BaseController
                 $sheetService->batchUpdateRows($srId, $learnerUpdates);
             }
 
-            // â”€â”€ Send Email Notifications to 4 Recipients â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ── 1. Append to Dispatch Register (Certificate Tracker) ──────────
+            try {
+                $this->appendToDispatchRegister(
+                    $sheetService,
+                    $selections,
+                    $certsUpdated,
+                    $receiverName,
+                    $receiverMob,
+                    $issuerName,
+                    $issuerMobile,
+                    $remark,
+                    $issueDate
+                );
+                Logger::info('Dispatch register entry appended', ['certs' => $certsUpdated]);
+            } catch (\Exception $drEx) {
+                // Non-fatal: log warning but don't fail the response
+                Logger::warn('Dispatch register append failed', ['error' => $drEx->getMessage()]);
+            }
+
+            // ── 2. Email Notifications ─────────────────────────────────────
             $currentUser = AuthService::user();
             $itgkEmail = null;
             $issuerEmail = $currentUser['email'] ?? null;
@@ -1170,14 +1314,14 @@ class CertificateController extends BaseController
 
                             // Use PHPMailer directly for sending to multiple recipients
                             $config = $emailService->getSettings();
-                            $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
+                            $mail = new PHPMailer(true);
                             $mail->isSMTP();
                             $mail->Host = $config['smtp_host'];
                             $mail->SMTPAuth = true;
                             $mail->Username = $config['smtp_user'];
                             $mail->Password = $config['smtp_pass'];
                             $encryption = strtolower($config['smtp_encryption']);
-                            $mail->SMTPSecure = ($encryption === 'ssl') ? \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS : \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+                            $mail->SMTPSecure = ($encryption === 'ssl') ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
                             $mail->Port = (int)$config['smtp_port'];
                             $mail->SMTPOptions = [
                                 'ssl' => [
@@ -1292,7 +1436,7 @@ class CertificateController extends BaseController
             implode(', ', $packetIds)  ?: implode(', ', $courses),         // 3. Certificate Packet IDs
             implode(', ', $courses),                                       // 4. Course Name
             implode(', ', $exams),                                         // 5. Exam Name
-            (string)$certsUpdated,                                         // 6. Grand Total
+            (string)($grandTotal ?: $certsUpdated),                        // 6. Grand Total (Total Students across all packets)
             'ISSUED',                                                      // 7. Action Type
             $issueDate,                                                    // 8. Date & Time
             $issuerName,                                                   // 9. Sender Name
@@ -1445,38 +1589,51 @@ class CertificateController extends BaseController
             $imData  = $sheetService->fetchParsedSheet($imId, $imRange);
             foreach ($imData['rows'] ?? [] as $ir) {
                 $c = trim((string)($ir['ITGK-CODE'] ?? $ir['ITGK CODE'] ?? $ir['ITGK_CODE'] ?? ''));
-                if ($c === $itgkCode) {
+                if ($c !== '' && strcasecmp($c, $itgkCode) === 0) {
                     $itgkMaster = [
-                        'name'     => trim((string)($ir['ITGK Name']   ?? $ir['ITGK NAME']   ?? '')),
-                        'email'    => trim((string)($ir['ITGK Email']  ?? $ir['Email']        ?? '')),
-                        'mobile'   => trim((string)($ir['ITGK Mobile'] ?? $ir['Mobile']       ?? '')),
-                        'district' => trim((string)($ir['ITGK District'] ?? $ir['DISTRICT']   ?? '')),
-                        'address'  => trim((string)($ir['ITGK Address']  ?? $ir['Address'] ?? $ir['ITGK ADDRESS'] ?? '')),
+                        'name'     => trim((string)($ir['ITGK Name']     ?? $ir['ITGK NAME']     ?? '')),
+                        'email'    => trim((string)($ir['ITGK Email']    ?? $ir['Email']          ?? $ir['EMAIL'] ?? '')),
+                        'mobile'   => trim((string)($ir['ITGK Mobile']   ?? $ir['Mobile']         ?? $ir['MOBILE'] ?? '')),
+                        'district' => trim((string)($ir['ITGK District'] ?? $ir['DISTRICT']     ?? $ir['District'] ?? '')),
+                        'address'  => trim((string)($ir['ITGK Address']  ?? $ir['Address']       ?? $ir['ITGK ADDRESS'] ?? '')),
                     ];
-
                     break;
                 }
             }
         } catch (\Exception $e) { /* non-fatal */ }
 
-        // --- Issuer info from session ---
+        // --- Issuer info from session & Google Sheet ---
         $currentUser  = AuthService::user();
-        $issuerName   = trim((string)($currentUser['name']  ?? ''));
-        $issuerEmail  = trim((string)($currentUser['email'] ?? ''));
-        $issuerRole   = trim((string)($currentUser['role']  ?? ''));
+        $sessionName  = trim((string)($currentUser['name'] ?? $currentUser['username'] ?? ''));
+        $sessionDesig = trim((string)($currentUser['designation'] ?? $currentUser['role'] ?? ''));
+        $sessionOffice= trim((string)($currentUser['office_name'] ?? $currentUser['office'] ?? ''));
 
-        // Parse issuer info stored in Image column: "Issued by: Name (Desig) | Mob: 9xx | on DATE"
+        // Parse issuer info stored in Image column:
+        // Format: "Issued by: Name (Desig) | Office: OfficeName | Mob: 9xx | on DATE"
         $imageStr    = trim((string)($certs[0]['issuer_info'] ?? ''));
+        $issuerName  = '';
+        $issuerDesig = '';
         $issuerFrom  = '';
         $issueDate   = date('d-m-Y');
-        if ($imageStr && preg_match('/Issued by:\s*(.+?)\s*\((.+?)\)\s*\|\s*Mob:.*?\|\s*on\s*(.+)/i', $imageStr, $m)) {
-            if (!$issuerName) $issuerName = trim($m[1]);
-            $issuerFrom = trim($m[2]); // designation as "issued from"
-            $issueDate  = trim($m[3]);
+
+        if ($imageStr && preg_match('/Issued by:\s*(.+?)(?:\s*\((.+?)\))?\s*\|(?:\s*Office:\s*(.+?)\s*\|)?\s*Mob:.*?\|\s*on\s*(.+)/i', $imageStr, $m)) {
+            $issuerName  = trim($m[1]);
+            $issuerDesig = !empty($m[2]) ? trim($m[2]) : '';
+            if (!empty($m[3])) {
+                $issuerFrom = trim($m[3]);
+            }
+            if (!empty($m[4])) {
+                $issueDate = trim($m[4]);
+            }
         }
 
-        // Issuer office location from session or DB
-        $issuerOffice = trim((string)($currentUser['office_name'] ?? ''));
+        // Use session details if not present in Image column
+        if (!$issuerName)  $issuerName  = $sessionName;
+        if (!$issuerDesig) $issuerDesig = $sessionDesig;
+        if (!$issuerFrom)  $issuerFrom  = $sessionOffice;
+
+        // Combine Name & Designation if designation exists
+        $issuedByFull = $issuerName . ($issuerDesig ? " ({$issuerDesig})" : '');
 
         // Transaction ID
         $txnId = 'ISSUE-' . date('Ymd') . '-' . strtoupper(substr(md5($itgkCode . implode(',', $numericIds)), 0, 6));
@@ -1488,11 +1645,11 @@ class CertificateController extends BaseController
             'cert'         => $cert,
             'certs'        => $certs,
             'itgkMaster'   => $itgkMaster,
-            'issuerName'   => $issuerName,
-            'issuerEmail'  => $issuerEmail,
-            'issuerRole'   => $issuerRole,
-            'issuerFrom'   => $issuerFrom,
-            'issuerOffice' => $issuerOffice,
+            'issuerName'   => $issuedByFull ?: ($certs[0]['issued_by'] ?? 'N/A'),
+            'issuerEmail'  => $currentUser['email'] ?? '',
+            'issuerRole'   => $sessionDesig,
+            'issuerFrom'   => $issuerFrom ?: ($certs[0]['current_location'] ?? 'N/A'),
+            'issuerOffice' => $issuerFrom ?: ($certs[0]['current_location'] ?? 'N/A'),
             'issueDate'    => $issueDate,
             'txnId'        => $txnId,
             'title'        => 'Certificate Issue Acknowledgement - SoftSam Portal',
@@ -1585,13 +1742,13 @@ class CertificateController extends BaseController
                 $itgkRows = $itgkMasterData['rows'] ?? [];
 
                 foreach ($itgkRows as $itgkRow) {
-                    $code = strtolower(trim((string)($itgkRow['ITGK CODE'] ?? $itgkRow['ITGK Code'] ?? '')));
-                    if (strcasecmp($code, $firstItgk) === 0) {
-                        $itgkEmail    = trim((string)($itgkRow['Email'] ?? $itgkRow['EMAIL'] ?? ''));
-                        $itgkName     = trim((string)($itgkRow['ITGK Name'] ?? $itgkRow['ITGK NAME'] ?? $itgkRow['Name'] ?? 'N/A'));
-                        $itgkAddress  = trim((string)($itgkRow['Address'] ?? $itgkRow['ADDRESS'] ?? 'N/A'));
-                        $itgkDistrict = trim((string)($itgkRow['District'] ?? $itgkRow['DISTRICT'] ?? 'N/A'));
-                        $itgkMobile   = trim((string)($itgkRow['Mobile'] ?? $itgkRow['MOBILE'] ?? $itgkRow['Mobile No.'] ?? 'N/A'));
+                    $code = trim((string)($itgkRow['ITGK-CODE'] ?? $itgkRow['ITGK CODE'] ?? $itgkRow['ITGK_CODE'] ?? ''));
+                    if ($code !== '' && strcasecmp($code, $firstItgk) === 0) {
+                        $itgkEmail    = trim((string)($itgkRow['ITGK Email']    ?? $itgkRow['Email']          ?? $itgkRow['EMAIL'] ?? ''));
+                        $itgkName     = trim((string)($itgkRow['ITGK Name']     ?? $itgkRow['ITGK NAME']     ?? $itgkRow['Name']  ?? 'N/A'));
+                        $itgkAddress  = trim((string)($itgkRow['ITGK Address']  ?? $itgkRow['Address']       ?? $itgkRow['ITGK ADDRESS'] ?? 'N/A'));
+                        $itgkDistrict = trim((string)($itgkRow['ITGK District'] ?? $itgkRow['DISTRICT']     ?? $itgkRow['District']    ?? 'N/A'));
+                        $itgkMobile   = trim((string)($itgkRow['ITGK Mobile']   ?? $itgkRow['Mobile']         ?? $itgkRow['MOBILE']      ?? 'N/A'));
                         break;
                     }
                 }
@@ -1604,22 +1761,33 @@ class CertificateController extends BaseController
             $totalPass = array_sum(array_column($certs, 'pass'));
             $totalGrand = array_sum(array_column($certs, 'grand_total'));
 
-            $currentUser = AuthService::user();
-            $issuerName = htmlspecialchars((string)($currentUser['name'] ?? $currentUser['username'] ?? 'N/A'));
-            $issuerRole = htmlspecialchars((string)($_SESSION['role'] ?? 'COORDINATOR'));
+            $currentUser  = AuthService::user();
+            $sessionName  = trim((string)($currentUser['name'] ?? $currentUser['username'] ?? ''));
+            $sessionDesig = trim((string)($currentUser['designation'] ?? $currentUser['role'] ?? ''));
+            $sessionOffice= trim((string)($currentUser['office_name'] ?? $currentUser['office'] ?? ''));
 
-            // Parse designation/Issued From from signature
-            $imageStr   = trim((string)($certs[0]['issuer_info'] ?? ''));
-            $issuerFrom = '';
-            if ($imageStr && preg_match('/Issued by:\s*(.+?)\s*\((.+?)\)/i', $imageStr, $m)) {
-                if (!$issuerName || $issuerName === 'N/A') {
-                    $issuerName = htmlspecialchars(trim($m[1]));
+            // Parse issuer info stored in Image column
+            $imageStr    = trim((string)($certs[0]['issuer_info'] ?? ''));
+            $issuerName  = '';
+            $issuerDesig = '';
+            $issuerFrom  = '';
+
+            if ($imageStr && preg_match('/Issued by:\s*(.+?)(?:\s*\((.+?)\))?\s*\|(?:\s*Office:\s*(.+?)\s*\|)?\s*Mob:.*?\|\s*on\s*(.+)/i', $imageStr, $m)) {
+                $issuerName  = trim($m[1]);
+                $issuerDesig = !empty($m[2]) ? trim($m[2]) : '';
+                if (!empty($m[3])) {
+                    $issuerFrom = trim($m[3]);
                 }
-                $issuerFrom = htmlspecialchars(trim($m[2]));
             }
-            if (!$issuerFrom) {
-                $issuerFrom = $issuerRole;
-            }
+
+            if (!$issuerName)  $issuerName  = $sessionName;
+            if (!$issuerDesig) $issuerDesig = $sessionDesig;
+            if (!$issuerFrom)  $issuerFrom  = $sessionOffice;
+
+            // Full Issued By string for email
+            $issuedByVal  = $issuerName . ($issuerDesig ? " ({$issuerDesig})" : '');
+            $issuedByFull = htmlspecialchars($issuedByVal ?: ($certs[0]['issued_by'] ?? 'N/A'));
+            $issuerFromEsc = htmlspecialchars($issuerFrom ?: ($certs[0]['current_location'] ?? 'N/A'));
 
             $issueDate = date('d-m-Y');
             $issueTime = date('h:i A');
@@ -1645,9 +1813,10 @@ class CertificateController extends BaseController
             $subject = "Certificate Issued ITGK - {$firstItgk} {$itgkName} {$txnId} {$issueDate}";
 
             $baseUrl = (getenv('APP_URL') ?: 'http://localhost/certificate') . '/';
-            $logoBlackUrl = 'https://softtechsso.com/public/assets/img/logo.png';
+            $logoPath = 'D:/xampp/htdocs/certificate/assets/img/logo-black.jpg';
             $logoRkclUrl  = 'https://banner2.cleanpng.com/20180815/vph/2d8115343fb6430696c56a87cc2a6523.webp';
             $verifyUrl = $baseUrl . 'verify/transaction?id=' . $txnId;
+            $logoSrc = file_exists($logoPath) ? 'cid:softtech_logo' : 'https://softtechsso.com/public/assets/img/logo.png';
 
             // Build table rows with full inline CSS (for email clients)
             $tableRows = '';
@@ -1664,6 +1833,7 @@ class CertificateController extends BaseController
                     . "<td style='padding:6px 10px;border:1px solid #e2e8f0;font-size:12px;'>" . htmlspecialchars((string)($c['cert_no_from'] ?? '-')) . "</td>"
                     . "<td style='padding:6px 10px;border:1px solid #e2e8f0;font-size:12px;'>" . htmlspecialchars((string)($c['cert_no_to'] ?? '-')) . "</td>"
                     . "<td style='padding:6px 10px;border:1px solid #e2e8f0;text-align:center;font-weight:700;color:#10b981;font-size:12px;'>Issued</td>"
+                    . "<td style='padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;color:#64748b;'>" . htmlspecialchars((string)($c['remark'] ?? '-')) . "</td>"
                     . "</tr>";
             }
 
@@ -1686,7 +1856,7 @@ class CertificateController extends BaseController
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border-radius:6px 6px 0 0;border:1px solid #e2e8f0;border-bottom:none;">
 <tr>
   <td style="padding:10px 15px;width:90px;vertical-align:middle;">
-    <img src="{$logoBlackUrl}" alt="Softtech Logo" height="60" style="display:block;height:60px;object-fit:contain;">
+    <img src="{$logoSrc}" alt="Softtech Logo" height="60" style="display:block;height:60px;object-fit:contain;">
   </td>
   <td style="padding:10px;text-align:center;vertical-align:middle;">
     <div style="font-size:18px;font-weight:900;color:#0f172a;letter-spacing:0.5px;margin-bottom:2px;">SOFTTECH MULTI SERVICE PVT. LTD.</div>
@@ -1720,11 +1890,11 @@ class CertificateController extends BaseController
       </td>
       <td style="width:20%;padding:4px 6px;vertical-align:top;">
         <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:2px;">Issued By</div>
-        <div style="font-size:11px;font-weight:700;color:#1e293b;">{$issuerName}</div>
+        <div style="font-size:11px;font-weight:700;color:#1e293b;">{$issuedByFull}</div>
       </td>
       <td style="width:20%;padding:4px 6px;vertical-align:top;">
         <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:2px;">Issued From</div>
-        <div style="font-size:11px;font-weight:700;color:#1e293b;">{$issuerFrom}</div>
+        <div style="font-size:11px;font-weight:700;color:#1e293b;">{$issuerFromEsc}</div>
       </td>
     </tr>
     </table>
@@ -1803,6 +1973,7 @@ class CertificateController extends BaseController
         <th style="padding:5px 10px;color:#fff;font-weight:700;text-align:left;border:1px solid #1e3a8a;font-size:10px;text-transform:uppercase;">Cert No. From</th>
         <th style="padding:5px 10px;color:#fff;font-weight:700;text-align:left;border:1px solid #1e3a8a;font-size:10px;text-transform:uppercase;">Cert No. To</th>
         <th style="padding:5px 10px;color:#fff;font-weight:700;text-align:center;border:1px solid #1e3a8a;font-size:10px;text-transform:uppercase;">Status</th>
+        <th style="padding:5px 10px;color:#fff;font-weight:700;text-align:left;border:1px solid #1e3a8a;font-size:10px;text-transform:uppercase;">Remark</th>
       </tr>
     </thead>
     <tbody>
@@ -1810,7 +1981,7 @@ class CertificateController extends BaseController
       <tr style="background:#f1f5f9;">
         <td style="padding:5px 10px;border:1px solid #e2e8f0;text-align:right;font-weight:800;color:#0f172a;font-size:12px;">TOTAL</td>
         <td style="padding:5px 10px;border:1px solid #e2e8f0;text-align:center;font-weight:800;color:#0f172a;font-size:13px;">{$totalPass}</td>
-        <td colspan="4" style="padding:5px 10px;border:1px solid #e2e8f0;"></td>
+        <td colspan="5" style="padding:5px 10px;border:1px solid #e2e8f0;"></td>
       </tr>
     </tbody>
     </table>
@@ -1883,22 +2054,34 @@ class CertificateController extends BaseController
 HTML;
 
             $emailService = new \App\Services\EmailService();
+            $queuedCount = 0;
 
-            $mail = $emailService->getMailerInstance();
-            
             foreach ($recipients as $email) {
-                $mail->addAddress($email);
+                if ($emailService->enqueue($email, $subject, $emailBody, true)) {
+                    $queuedCount++;
+                }
             }
 
-            $mail->isHTML(true);
-            $mail->Subject = $subject;
-            $mail->Body = $emailBody;
-            $mail->send();
+            // Trigger non-blocking background queue runner HTTP request
+            $appUrl = rtrim(getenv('APP_URL') ?: 'http://localhost/certificate', '/');
+            $cronUrl = $appUrl . '/cron/process-email-queue';
+            
+            $ch = curl_init($cronUrl);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT_MS => 500, // Non-blocking: wait only 500ms max
+                CURLOPT_SSL_VERIFYPEER => false,
+            ]);
+            @curl_exec($ch);
+            @curl_close($ch);
 
-            echo json_encode(['success' => true, 'message' => 'Acknowledgement email sent to ' . count($recipients) . ' stakeholders successfully!']);
+            echo json_encode([
+                'success' => true, 
+                'message' => "Acknowledgement email queued for {$queuedCount} stakeholder(s) and sending in background!"
+            ]);
         } catch (\Exception $e) {
             http_response_code(500);
-            echo json_encode(['success' => false, 'message' => 'Failed to send email: ' . $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => 'Failed to queue email: ' . $e->getMessage()]);
         }
     }
     

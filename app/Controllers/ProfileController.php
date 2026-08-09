@@ -38,7 +38,9 @@ class ProfileController extends BaseController
                  FROM users u
                  LEFT JOIN employee_office_map eom ON u.id = eom.user_id
                  LEFT JOIN offices o ON eom.office_id = o.id
-                 WHERE u.id = :id",
+                 WHERE u.id = :id
+                 ORDER BY eom.id DESC
+                 LIMIT 1",
                 ['id' => $currentUser['id']]
             );
         }

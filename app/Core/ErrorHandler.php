@@ -349,7 +349,12 @@ HTML;
     private static function isApiRequest(): bool
     {
         $uri = $_SERVER['REQUEST_URI'] ?? '';
-        return strpos($uri, '/api/') !== false;
+        $accept = $_SERVER['HTTP_ACCEPT'] ?? '';
+        $requestedWith = $_SERVER['HTTP_X_REQUESTED_WITH'] ?? '';
+
+        return strpos($uri, '/api/') !== false
+            || str_contains($accept, 'application/json')
+            || strtolower($requestedWith) === 'xmlhttprequest';
     }
 
     /**

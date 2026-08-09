@@ -94,9 +94,10 @@ $router->post('/auth/firebase-verify', 'App\\Controllers\\AuthController', 'fire
 $router->get('/itgk_certificate.php', 'App\\Controllers\\CertificateController', 'index');
 $router->get('/learner_result.php', 'App\\Controllers\\LearnerController', 'index');
 
-// Public Verification routes (no authentication required)
+// Public Verification & Cron routes (no authentication required)
 $router->get('/verify/transaction', 'App\\Controllers\\CertificateController', 'verifyTransaction');
 $router->post('/verify/log', 'App\\Controllers\\CertificateController', 'logVerification');
+$router->get('/cron/process-email-queue', 'App\\Controllers\\SmtpController', 'processEmailQueue');
 
 // Protected routes (authentication required)
 $router->group([
@@ -114,13 +115,24 @@ $router->group([
     // Analytics
     $router->get('/analytics', 'App\\Controllers\\AnalyticsController', 'index');
 
-    // Certificates
+    // Module 1: ITGK (Details, Admissions, Formats)
+    $router->get('/itgk/details', 'App\\Controllers\\ItgkController', 'index');
+    $router->get('/itgk/admissions', 'App\\Controllers\\ItgkController', 'admissions');
+    $router->get('/itgk/formats', 'App\\Controllers\\ItgkController', 'formats');
+
+    // Module 2: Certificates Management
     $router->get('/itgk/list', 'App\\Controllers\\CertificateController', 'index');
     $router->get('/certificates', 'App\\Controllers\\CertificateController', 'index');
     $router->get('/itgk/acknowledgement', 'App\\Controllers\\CertificateController', 'acknowledgement');
     $router->post('/itgk/send_ack_email', 'App\\Controllers\\CertificateController', 'sendAckEmail');
 
-    // Learners
+    // Module 3: Books Management / ITGK Book Issue
+    $router->get('/books/list', 'App\\Controllers\\BooksController', 'index');
+    $router->get('/books', 'App\\Controllers\\BooksController', 'index');
+    $router->post('/books/issue', 'App\\Controllers\\BooksController', 'store');
+
+    // Module 4: Learners (Details, Results)
+    $router->get('/learners/details', 'App\\Controllers\\LearnerController', 'index');
     $router->get('/learners/list', 'App\\Controllers\\LearnerController', 'index');
     $router->get('/learners', 'App\\Controllers\\LearnerController', 'index');
     $router->get('/learners/edit', 'App\\Controllers\\LearnerController', 'edit');
@@ -226,10 +238,13 @@ try {
         require __DIR__ . '/app/Views/pages/errors/404.php';
     }
 } catch (App\Exceptions\AuthException $e) {
-    // Handle authentication exceptions - redirect to login
-    App\Helpers\Logger::info('Auth exception, redirecting to login', [
-        'message' => $e->getMessage()
+    App\Helpers\Logger::info('Auth exception', [
+        'message' => $e->getMessage(),
+        'code'    => $e->getStatusCode()
     ]);
+
+    $statusCode = $e->getStatusCode();
+    http_response_code($statusCode);
 
     // For AJAX requests, return JSON
     if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
@@ -237,14 +252,26 @@ try {
         echo json_encode([
             'success' => false,
             'error' => [
-                'message' => 'Authentication required',
-                'code' => 401
+                'message' => $e->getMessage(),
+                'code' => $statusCode
             ]
         ]);
-    } else {
-        // For regular requests, redirect to login
-        header('Location: ' . BASE_URL . 'login');
+        exit;
     }
+
+    // Handle 403 Forbidden vs 401 Unauthorized
+    if ($statusCode === 403) {
+        echo '<div style="font-family:sans-serif;text-align:center;padding:50px;">' .
+             '<h1 style="color:#e11d48;font-size:48px;margin-bottom:10px;">403 Access Denied</h1>' .
+             '<p style="color:#475569;font-size:16px;">You do not have permission to access this page. Required Role: <strong>SUPERADMIN</strong>.</p>' .
+             '<a href="' . BASE_URL . 'dashboard" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">Return to Dashboard</a>' .
+             '</div>';
+        exit;
+    }
+
+    // For 401, redirect to login
+    header('Location: ' . BASE_URL . 'login');
+    exit;
 } catch (Exception $e) {
     App\Helpers\Logger::error('Unhandled exception', [
         'message' => $e->getMessage(),

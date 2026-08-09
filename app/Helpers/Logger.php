@@ -118,6 +118,14 @@ class Logger
     }
 
     /**
+     * Alias for warning method
+     */
+    public static function warn(string $message, array $context = []): void
+    {
+        self::warning($message, $context);
+    }
+
+    /**
      * Log a debug message (only in debug mode)
      * 
      * @param string $message Log message

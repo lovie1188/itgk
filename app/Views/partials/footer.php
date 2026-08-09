@@ -17,5 +17,6 @@
 <!-- Scripts -->
 <script src="<?= BASE_URL ?>assets/vendor/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
 <script src="<?= BASE_URL ?>assets/vendor/jquery-3.6.0.min.js"></script>
+<script src="<?= BASE_URL ?>assets/vendor/select2/select2.min.js"></script>
 <script src="<?= BASE_URL ?>assets/vendor/axios-0.21.1.min.js"></script>
 <script src="<?= BASE_URL ?>assets/vendor/jquery.dataTables-1.11.5.min.js"></script>

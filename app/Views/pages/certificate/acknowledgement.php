@@ -827,6 +827,7 @@ $verifyUrl = (getenv('APP_URL') ?: 'http://localhost/certificate') . '/verify/tr
                         <th>Cert No. From</th>
                         <th>Cert No. To</th>
                         <th style="text-align: center;">Status</th>
+                        <th>Remark</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -842,12 +843,13 @@ $verifyUrl = (getenv('APP_URL') ?: 'http://localhost/certificate') . '/verify/tr
                             <td><?= htmlspecialchars((string) ($c['cert_no_from'] ?? '-')) ?></td>
                             <td><?= htmlspecialchars((string) ($c['cert_no_to'] ?? '-')) ?></td>
                             <td class="ctr" style="color: #10b981; font-weight: 700;">Issued</td>
+                            <td><small class="text-muted"><?= htmlspecialchars((string) ($c['remark'] ?? '-')) ?></small></td>
                         </tr>
                     <?php endforeach; ?>
                     <tr class="ent-table-total">
                         <td style="text-align: right; font-weight: 800;">TOTAL</td>
                         <td class="ctr"><?= $totalPass ?></td>
-                        <td colspan="4"></td>
+                        <td colspan="5"></td>
                     </tr>
                 </tbody>
             </table>
@@ -946,6 +948,7 @@ $verifyUrl = (getenv('APP_URL') ?: 'http://localhost/certificate') . '/verify/tr
                         <th>Cert No. From</th>
                         <th>Cert No. To</th>
                         <th style="text-align: center;">Status</th>
+                        <th>Remark</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -961,6 +964,7 @@ $verifyUrl = (getenv('APP_URL') ?: 'http://localhost/certificate') . '/verify/tr
                             <td><?= htmlspecialchars((string) ($c['cert_no_from'] ?? '-')) ?></td>
                             <td><?= htmlspecialchars((string) ($c['cert_no_to'] ?? '-')) ?></td>
                             <td class="ctr">Issued</td>
+                            <td><?= htmlspecialchars((string) ($c['remark'] ?? '-')) ?></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -968,7 +972,7 @@ $verifyUrl = (getenv('APP_URL') ?: 'http://localhost/certificate') . '/verify/tr
                     <tr>
                         <td style="text-align:right">TOTAL</td>
                         <td class="ctr"><?= $totalPass ?></td>
-                        <td class="ctr" colspan="4"></td>
+                        <td class="ctr" colspan="5"></td>
                     </tr>
                 </tfoot>
             </table>

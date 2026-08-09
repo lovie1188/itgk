@@ -53,7 +53,7 @@ class LearnerController extends BaseController
         $page = max(1, (int)($_GET['page'] ?? 1));
         $limit = max(10, min(500, (int)($_GET['limit'] ?? 100)));
 
-        $learners = [];
+        $allLearners = [];
         try {
             $sheetService = new \App\Services\GoogleSheetService();
             $sheetId = $sheetService->getStudentResultSheetId();
@@ -62,7 +62,7 @@ class LearnerController extends BaseController
             $rawRows = $sheetData['rows'] ?? [];
 
             foreach ($rawRows as $idx => $r) {
-                $learners[] = [
+                $allLearners[] = [
                     'id' => $idx + 1,
                     's_no' => $r['S No.'] ?? $r['S. No.'] ?? ($idx + 1),
                     'receiving_date' => $r['Receiving Date'] ?? $r['DATE'] ?? '',
@@ -77,22 +77,60 @@ class LearnerController extends BaseController
                     'certificate_no' => $r['Certificate Number'] ?? $r['Certificate No'] ?? '',
                     'course_name' => $r['Course Name'] ?? '',
                     'exam_name' => $r['Exam Name'] ?? $r['exam_name on certificate'] ?? $r['BATCH'] ?? '',
-                    'status' => $r['Status'] ?? 'Available',
+                    'status' => $r['Status'] ?? $r['STATUS'] ?? $r['Statu'] ?? $r['status'] ?? 'Available',
                     'remark' => $r['Remark'] ?? ''
                 ];
             }
+            // Extract unique values for filter dropdowns
+            $itgkOptions   = array_values(array_filter(array_unique(array_column($allLearners, 'itgk_code'))));
+            $courseOptions = array_values(array_filter(array_unique(array_column($allLearners, 'course_name'))));
+            $examOptions   = array_values(array_filter(array_unique(array_column($allLearners, 'exam_name'))));
+            sort($itgkOptions);
+            sort($courseOptions);
+            sort($examOptions);
+
+            // Read filter params from GET
+            $filterItgk   = trim((string)($_GET['itgk_code']   ?? ''));
+            $filterSearch = trim((string)($_GET['search']      ?? ''));
+            $filterCourse = trim((string)($_GET['course_name'] ?? ''));
+            $filterExam   = trim((string)($_GET['exam_name']   ?? ''));
+
+            // Filter learners list
+            $filteredLearners = array_filter($allLearners, function ($l) use ($filterItgk, $filterSearch, $filterCourse, $filterExam) {
+                if ($filterItgk !== '' && strcasecmp((string)$l['itgk_code'], $filterItgk) !== 0) {
+                    return false;
+                }
+                if ($filterCourse !== '' && strcasecmp((string)$l['course_name'], $filterCourse) !== 0) {
+                    return false;
+                }
+                if ($filterExam !== '' && strcasecmp((string)$l['exam_name'], $filterExam) !== 0) {
+                    return false;
+                }
+                if ($filterSearch !== '') {
+                    $s = strtolower($filterSearch);
+                    $nameMatch   = str_contains(strtolower((string)$l['learner_name']), $s);
+                    $codeMatch   = str_contains(strtolower((string)$l['learner_code']), $s);
+                    $fatherMatch = str_contains(strtolower((string)$l['father_name']), $s);
+                    if (!$nameMatch && !$codeMatch && !$fatherMatch) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            $learners = array_values($filteredLearners);
         } catch (\Exception $e) {
             Logger::error('Failed to fetch learner results from Google Sheet', ['error' => $e->getMessage()]);
         }
 
         // Build analytics purely from sheet data — no DB fallback
         $analytics = [];
-        if (!empty($learners)) {
+        if (!empty($allLearners)) {
             $analytics = [
-                'total'  => count($learners),
-                'pass'   => count(array_filter($learners, fn($l) => strcasecmp((string)($l['result'] ?? ''), 'PASS')   === 0)),
-                'fail'   => count(array_filter($learners, fn($l) => strcasecmp((string)($l['result'] ?? ''), 'FAIL')   === 0)),
-                'absent' => count(array_filter($learners, fn($l) => strcasecmp((string)($l['result'] ?? ''), 'ABSENT') === 0)),
+                'total'  => count($allLearners),
+                'pass'   => count(array_filter($allLearners, fn($l) => strcasecmp((string)($l['result'] ?? ''), 'PASS')   === 0)),
+                'fail'   => count(array_filter($allLearners, fn($l) => strcasecmp((string)($l['result'] ?? ''), 'FAIL')   === 0)),
+                'absent' => count(array_filter($allLearners, fn($l) => strcasecmp((string)($l['result'] ?? ''), 'ABSENT') === 0)),
             ];
         }
 
@@ -102,16 +140,25 @@ class LearnerController extends BaseController
         $pagedLearners = array_slice($learners, ($page - 1) * $limit, $limit);
 
         $data = [
-            'learners'    => $pagedLearners,
-            'analytics'   => $analytics,
-            'title'       => 'Learner Results | SoftSam Portal',
-            'view'        => 'pages/learner/list',
-            'currentPage' => $page,
-            'total'       => $totalCount,
-            'limit'       => $limit,
-            'totalPages'  => $totalPages,
-            'sheetTab'    => (new \App\Services\GoogleSheetService())->getStudentResultTab(),
-            'baseUrl'     => BASE_URL . 'learners/list',
+            'learners'      => $pagedLearners,
+            'analytics'     => $analytics,
+            'itgkOptions'   => $itgkOptions ?? [],
+            'courseOptions' => $courseOptions ?? [],
+            'examOptions'   => $examOptions ?? [],
+            'filters'       => [
+                'itgk_code'   => $_GET['itgk_code'] ?? '',
+                'search'      => $_GET['search'] ?? '',
+                'course_name' => $_GET['course_name'] ?? '',
+                'exam_name'   => $_GET['exam_name'] ?? '',
+            ],
+            'title'         => 'Learner Results | SoftSam Portal',
+            'view'          => 'pages/learner/list',
+            'currentPage'   => $page,
+            'total'         => $totalCount,
+            'limit'         => $limit,
+            'totalPages'    => $totalPages,
+            'sheetTab'      => (new \App\Services\GoogleSheetService())->getStudentResultTab(),
+            'baseUrl'       => BASE_URL . 'learners/list',
         ];
 
         $this->view('pages/learner/list', $data);
@@ -335,7 +382,7 @@ class LearnerController extends BaseController
      * 
      * @return void
      */
-    private function validateCsrf(): void
+    protected function validateCsrf(): void
     {
         $token = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
 

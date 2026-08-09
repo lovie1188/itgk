@@ -174,6 +174,18 @@ class Database
     }
 
     /**
+     * Execute a query and return affected rows count
+     * 
+     * @param string $sql SQL query
+     * @param array $params Parameters to bind
+     * @return int Number of affected rows
+     */
+    public function execute(string $sql, array $params = []): int
+    {
+        return $this->query($sql, $params)->rowCount();
+    }
+
+    /**
      * Execute a query and fetch all results
      * 
      * @param string $sql SQL query
