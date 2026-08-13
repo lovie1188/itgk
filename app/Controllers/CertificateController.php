@@ -456,7 +456,7 @@ class CertificateController extends BaseController
 
             $learnerUpdates = [];
             foreach ($srRows as $rowOffset => $r) {
-                $itgk   = strtolower(trim((string)($r['ITGK Code']   ?? $r['ITGK CODE'] ?? $r['Statu'] ?? '')));
+                $itgk   = strtolower(trim((string)($r['ITGK Code']   ?? $r['ITGK CODE'] ?? $r['ITGK_CODE'] ?? '')));
                 $course = strtolower(trim((string)($r['Course Name']  ?? '')));
                 $exam   = strtolower(trim((string)($r['Exam Name']    ?? $r['exam_name on certificate'] ?? $r['BATCH'] ?? '')));
                 $heldDate = str_replace('-', '/', strtolower(trim((string)($r['exam_held_date'] ?? ''))));
@@ -804,7 +804,7 @@ class CertificateController extends BaseController
             // Group by ITGK Code + Course Name + Exam Name
             $groups = [];
             foreach ($rawRows as $r) {
-                $itgk   = trim((string)($r['ITGK Code'] ?? $r['ITGK CODE'] ?? $r['Statu'] ?? ''));
+                $itgk   = trim((string)($r['ITGK Code'] ?? $r['ITGK CODE'] ?? $r['ITGK_CODE'] ?? ''));
                 $course = trim((string)($r['Course Name'] ?? ''));
                 $exam   = trim((string)($r['Exam Name']  ?? $r['exam_name on certificate'] ?? $r['BATCH'] ?? ''));
 
@@ -1179,7 +1179,7 @@ class CertificateController extends BaseController
 
             $learnerUpdates = [];
             foreach ($srRows as $rowOffset => $r) {
-                $itgk   = strtolower(trim((string)($r['ITGK Code']   ?? $r['ITGK CODE'] ?? $r['Statu'] ?? '')));
+                $itgk   = strtolower(trim((string)($r['ITGK Code']   ?? $r['ITGK CODE'] ?? $r['ITGK_CODE'] ?? '')));
                 $course = strtolower(trim((string)($r['Course Name']  ?? '')));
                 $exam   = strtolower(trim((string)($r['Exam Name']    ?? $r['exam_name on certificate'] ?? $r['BATCH'] ?? '')));
                 $heldDate = str_replace('-', '/', strtolower(trim((string)($r['exam_held_date'] ?? ''))));

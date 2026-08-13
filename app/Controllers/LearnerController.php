@@ -66,7 +66,7 @@ class LearnerController extends BaseController
                     'id' => $idx + 1,
                     's_no' => $r['S No.'] ?? $r['S. No.'] ?? ($idx + 1),
                     'receiving_date' => $r['Receiving Date'] ?? $r['DATE'] ?? '',
-                    'itgk_code' => $r['ITGK Code'] ?? $r['ITGK CODE'] ?? $r['Statu'] ?? '',
+                    'itgk_code' => trim((string)($r['ITGK Code'] ?? $r['ITGK CODE'] ?? $r['ITGK_CODE'] ?? '')),
                     'learner_code' => $r['Learner Code'] ?? '',
                     'learner_name' => $r['Learner Name'] ?? $r['Name'] ?? '',
                     'father_name' => $r['FATHER NAME'] ?? $r['Father Name'] ?? '',
@@ -77,7 +77,7 @@ class LearnerController extends BaseController
                     'certificate_no' => $r['Certificate Number'] ?? $r['Certificate No'] ?? '',
                     'course_name' => $r['Course Name'] ?? '',
                     'exam_name' => $r['Exam Name'] ?? $r['exam_name on certificate'] ?? $r['BATCH'] ?? '',
-                    'status' => $r['Status'] ?? $r['STATUS'] ?? $r['Statu'] ?? $r['status'] ?? 'Available',
+                    'status' => $r['Status'] ?? $r['STATUS'] ?? $r['status'] ?? 'Available',
                     'remark' => $r['Remark'] ?? ''
                 ];
             }
