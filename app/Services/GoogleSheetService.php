@@ -393,13 +393,19 @@ class GoogleSheetService
      */
     private function parseCsvData(string $csvData): array
     {
-        $lines = str_getcsv($csvData, "\n");
         $parsed = [];
-        foreach ($lines as $line) {
-            if (trim($line) === '')
+        $stream = fopen('php://memory', 'r+');
+        fwrite($stream, $csvData);
+        rewind($stream);
+
+        while (($data = fgetcsv($stream)) !== false) {
+            if (empty($data) || (count($data) === 1 && $data[0] === null)) {
                 continue;
-            $parsed[] = str_getcsv($line);
+            }
+            $parsed[] = $data;
         }
+
+        fclose($stream);
         return $parsed;
     }
 
