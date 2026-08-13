@@ -59,16 +59,25 @@ require_once __DIR__ . '/config/cors.php';
 // Load Composer autoloader if available
 if (file_exists(__DIR__ . '/vendor/autoload.php')) {
     require_once __DIR__ . '/vendor/autoload.php';
-} else {
-    // Fallback: Load files manually
-    require_once __DIR__ . '/app/Core/ErrorHandler.php';
-    require_once __DIR__ . '/app/Core/Router.php';
-    require_once __DIR__ . '/app/Core/Database.php';
-    require_once __DIR__ . '/app/Helpers/Logger.php';
-    require_once __DIR__ . '/app/Helpers/View.php';
-    require_once __DIR__ . '/app/Helpers/Csrf.php';
-    require_once __DIR__ . '/app/Services/AuthService.php';
 }
+
+// Always register PSR-4 fallback autoloader for App\ namespace
+spl_autoload_register(function ($class) {
+    $prefix = 'App\\';
+    $baseDir = __DIR__ . '/app/';
+    $len = strlen($prefix);
+
+    if (strncmp($prefix, $class, $len) !== 0) {
+        return;
+    }
+
+    $relativeClass = substr($class, $len);
+    $file = $baseDir . str_replace('\\', '/', $relativeClass) . '.php';
+
+    if (file_exists($file)) {
+        require_once $file;
+    }
+});
 
 // Register error handler
 App\Core\ErrorHandler::register();
@@ -129,6 +138,8 @@ $router->group([
     // Module 3: Books Management / ITGK Book Issue
     $router->get('/books/list', 'App\\Controllers\\BooksController', 'index');
     $router->get('/books', 'App\\Controllers\\BooksController', 'index');
+    $router->get('/books/acknowledgement', 'App\\Controllers\\BooksController', 'acknowledgement');
+    $router->post('/books/send_ack_email', 'App\\Controllers\\BooksController', 'sendAckEmail');
     $router->post('/books/issue', 'App\\Controllers\\BooksController', 'store');
 
     // Module 4: Learners (Details, Results)
@@ -151,8 +162,11 @@ $router->group([
         $router->post('/itgk/consolidate', 'App\\Controllers\\CertificateController', 'consolidate');
         $router->post('/itgk/issue_batch', 'App\\Controllers\\CertificateController', 'issueBatch');
         $router->post('/itgk/bulk_issue', 'App\\Controllers\\CertificateController', 'bulkIssue');
-        $router->post('/itgk/delete', 'App\\Controllers\\CertificateController', 'delete');
         $router->post('/certificates/consolidate', 'App\\Controllers\\CertificateController', 'consolidate');
+
+        // Books management
+        $router->post('/books/update', 'App\\Controllers\\BooksController', 'update');
+        $router->post('/books/delete', 'App\\Controllers\\BooksController', 'destroy');
 
         // Learner management
         $router->post('/learners/create', 'App\\Controllers\\LearnerController', 'store');

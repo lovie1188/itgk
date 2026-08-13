@@ -158,17 +158,17 @@ class GoogleSheetService
 
     public function getBooksSheetId(): string
     {
-        return getenv('GSHEET_BOOKS_ID') ?: '18fxE3NS6fT2Nkrgpw-pFFvLSIXIUD2mvSeCBiacJVv4';
+        return getenv('GSHEET_BOOKS_ID') ?: '16-aykoIV-uUWiqgh1xyhoQuC7zesJoko7uZCWCEDOXg';
     }
 
     public function getBooksTab(): string
     {
-        return getenv('GSHEET_BOOKS_TAB') ?: 'Book_Issue';
+        return getenv('GSHEET_BOOKS_TAB') ?: 'new_book_issue';
     }
 
     public function getBooksRange(): string
     {
-        return getenv('GSHEET_BOOKS_RANGE') ?: 'Book_Issue!A1:Z';
+        return getenv('GSHEET_BOOKS_RANGE') ?: 'new_book_issue!A1:X';
     }
 
     // ----------------------------------------------------------------
@@ -544,10 +544,18 @@ class GoogleSheetService
     {
         $token = $this->getAccessToken();
 
+        // Encode only the tab name; keep "!A1:Z1" cell-range notation literal for Sheets API.
+        $rangeForUrl = $range;
+        if (strpos($range, '!') !== false) {
+            [$tabPart, $cellPart] = explode('!', $range, 2);
+            $rangeForUrl = urlencode($tabPart) . '!' . $cellPart;
+        } else {
+            $rangeForUrl = urlencode($range);
+        }
         $url = 'https://sheets.googleapis.com/v4/spreadsheets/'
             . urlencode($sheetId)
             . '/values/'
-            . urlencode($range);
+            . $rangeForUrl;
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -583,10 +591,19 @@ class GoogleSheetService
     {
         $token = $this->getAccessToken();
 
+        // Encode only the tab name portion; keep the "!A1:Z1" cell range literal.
+        $rangeForUrl = $range;
+        if (strpos($range, '!') !== false) {
+            [$tabPart, $cellPart] = explode('!', $range, 2);
+            $rangeForUrl = urlencode($tabPart) . '!' . $cellPart;
+        } else {
+            $rangeForUrl = urlencode($range);
+        }
+
         $url = 'https://sheets.googleapis.com/v4/spreadsheets/'
             . urlencode($sheetId)
             . '/values/'
-            . urlencode($range)
+            . $rangeForUrl
             . '?valueInputOption=USER_ENTERED';
 
         $body = json_encode([
@@ -697,10 +714,11 @@ class GoogleSheetService
             [$tabName] = explode('!', $tab, 2);
         }
 
+        // Encode only the tab name; keep "!A:Z" literal so Sheets API can parse the range.
         $url = 'https://sheets.googleapis.com/v4/spreadsheets/'
             . urlencode($sheetId)
             . '/values/'
-            . urlencode("{$tabName}!A:Z")
+            . urlencode($tabName) . '!A:Z'
             . ':append?valueInputOption=' . urlencode($valueOption);
 
         $body = json_encode([
@@ -749,7 +767,7 @@ class GoogleSheetService
         $url = 'https://sheets.googleapis.com/v4/spreadsheets/'
             . urlencode($sheetId)
             . '/values/'
-            . urlencode("{$tab}!A{$rowNum}:Z{$rowNum}")
+            . urlencode($tab) . "!A{$rowNum}:Z{$rowNum}"
             . ':clear';
 
         $ch = curl_init($url);

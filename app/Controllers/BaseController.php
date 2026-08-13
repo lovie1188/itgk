@@ -319,4 +319,12 @@ class BaseController
     {
         Csrf::validate();
     }
+
+    /**
+     * Check CSRF token status without throwing exception or exiting
+     */
+    protected function verifyCsrf(): bool
+    {
+        return Csrf::verify();
+    }
 }

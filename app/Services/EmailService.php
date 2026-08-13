@@ -335,7 +335,27 @@ class EmailService
             Logger::info('Email enqueued successfully', ['to' => $toEmail, 'subject' => $subject]);
             return true;
         } catch (\Exception $e) {
-            Logger::error('Failed to enqueue email', ['error' => $e->getMessage(), 'to' => $toEmail]);
+            Logger::warn('Database email queue unavailable, sending directly via SMTP', ['error' => $e->getMessage(), 'to' => $toEmail]);
+            return $this->sendDirect($toEmail, $subject, $body, $isHtml);
+        }
+    }
+
+    /**
+     * Send email directly via PHPMailer (synchronous fallback)
+     */
+    public function sendDirect(string $toEmail, string $subject, string $body, bool $isHtml = true): bool
+    {
+        try {
+            $mail = $this->getMailer();
+            $mail->addAddress($toEmail);
+            $mail->isHTML($isHtml);
+            $mail->Subject = $subject;
+            $mail->Body    = $body;
+            $mail->send();
+            Logger::info('Direct SMTP email sent successfully', ['to' => $toEmail, 'subject' => $subject]);
+            return true;
+        } catch (\Exception $ex) {
+            Logger::error('Direct SMTP email failed', ['to' => $toEmail, 'error' => $ex->getMessage()]);
             return false;
         }
     }
