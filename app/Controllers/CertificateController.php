@@ -781,8 +781,10 @@ class CertificateController extends BaseController
                                 $learnerRow[] = $sanitized['itgk_code'];
                             } elseif ($colLower === 'course name') {
                                 $learnerRow[] = $sanitized['course_name'];
-                            } elseif (in_array($colLower, ['exam name', 'exam_name on certificate', 'batch', 'exam'])) {
-                                $learnerRow[] = $colDExam;
+                            } elseif (in_array($colLower, ['exam name', 'exam_name on certificate', 'exam'])) {
+                                $learnerRow[] = $sanitized['exam_name'];
+                            } elseif ($colLower === 'batch') {
+                                $learnerRow[] = ''; // leave Batch column blank
                             } elseif (in_array($colLower, ['exam date', 'exam_date', 'exam held date', 'exam_held_date'])) {
                                 $learnerRow[] = $sanitized['exam_date'];
                             } elseif (in_array($colLower, ['district'])) {
@@ -1356,7 +1358,7 @@ class CertificateController extends BaseController
                                     <p>A bulk certificate issuance has been completed with the following details:</p>
                                     <table style='width: 100%; border-collapse: collapse; margin: 15px 0;'>
                                         <tr><td style='padding: 8px; border: 1px solid #ddd; font-weight: bold;'>Total Certificates Issued:</td><td style='padding: 8px; border: 1px solid #ddd;'>" . htmlspecialchars((string)$certsUpdated) . "</td></tr>
-                                        <tr><td style='padding: 8px; border: 1px solid #ddd; font-weight: bold;'>ITGK Codes:</td><td style='padding: 8px; border: 1px solid #ddd;'>" . htmlspecialchars(implode(', ', $itgkCodes)) . "</td></tr>
+                                        <tr><td style='padding: 8px; border: 1px solid #ddd; font-weight: bold;'>ITGK Codes:</td><td style='padding: 8px; border: 1px solid #ddd;'>" . htmlspecialchars(implode(', ', array_keys($itgkCodes))) . "</td></tr>
                                         <tr><td style='padding: 8px; border: 1px solid #ddd; font-weight: bold;'>Receiver:</td><td style='padding: 8px; border: 1px solid #ddd;'>" . htmlspecialchars($receiverName) . " (" . htmlspecialchars($receiverDesig) . ")</td></tr>
                                         <tr><td style='padding: 8px; border: 1px solid #ddd; font-weight: bold;'>Issued By:</td><td style='padding: 8px; border: 1px solid #ddd;'>" . htmlspecialchars($issuerName) . " (" . htmlspecialchars($issuerDesig) . ")</td></tr>
                                         <tr><td style='padding: 8px; border: 1px solid #ddd; font-weight: bold;'>Issue Date:</td><td style='padding: 8px; border: 1px solid #ddd;'>" . htmlspecialchars($issueDate) . "</td></tr>
