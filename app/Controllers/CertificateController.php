@@ -1010,30 +1010,14 @@ class CertificateController extends BaseController
             return;
         }
 
-        // Validate issuer details - Non-SUPERADMIN users cannot override their own issuer info
+        // Auto-fill/enforce issuer details from logged in user if non-SUPERADMIN
         $currentUser = AuthService::user();
         $isSuperAdmin = AuthService::isSuperAdmin();
 
         if (!$isSuperAdmin) {
-            // For non-SUPERADMIN: issuer details MUST match the logged-in user
-            $expectedIssuerName = (string)($currentUser['name'] ?? '');
-            $expectedIssuerDesig = (string)($currentUser['role'] ?? '');
-
-            if (strcasecmp($issuerName, $expectedIssuerName) !== 0) {
-                $this->json([
-                    'success' => false,
-                    'message' => 'Issuer Name must be your account name. Unauthorized modification attempt.'
-                ], 403);
-                return;
-            }
-
-            if (strcasecmp($issuerDesig, $expectedIssuerDesig) !== 0) {
-                $this->json([
-                    'success' => false,
-                    'message' => 'Issuer Designation must be your role. Unauthorized modification attempt.'
-                ], 403);
-                return;
-            }
+            $issuerName  = (string)($currentUser['name'] ?? $issuerName);
+            $issuerDesig = (string)($currentUser['role'] ?? $currentUser['designation'] ?? $issuerDesig);
+            $issuerMobile = (string)($currentUser['mobile'] ?? $issuerMobile);
         }
 
         @set_time_limit(120);
@@ -1412,25 +1396,6 @@ class CertificateController extends BaseController
                 'learners_updated' => $learnersUpdated,
                 'receiver'        => $receiverName,
             ]);
-
-            // ── Append to Dispatch Register (Certificate Tracker) ──────────
-            try {
-                $this->appendToDispatchRegister(
-                    $sheetService,
-                    $selections,
-                    $certsUpdated,
-                    $receiverName,
-                    $receiverMob,
-                    $issuerName,
-                    $issuerMobile,
-                    $remark,
-                    $issueDate
-                );
-                Logger::info('Dispatch register entry appended', ['certs' => $certsUpdated]);
-            } catch (\Exception $drEx) {
-                // Non-fatal: log warning but don't fail the response
-                Logger::warn('Dispatch register append failed', ['error' => $drEx->getMessage()]);
-            }
 
             $this->json([
                 'success'           => true,
