@@ -77,8 +77,10 @@ class LearnerController extends BaseController
                     'certificate_no' => $r['Certificate Number'] ?? '',
                     'course_name'    => $r['Course Name'] ?? '',
                     'exam_name'      => $r['Exam Name'] ?? '',
+                    'itgk_name'      => $r['ITGK NAME'] ?? '',
                     'status'         => $r['STATUS'] ?? 'Available',
-                    'remark'         => $r['Remark'] ?? ''
+                    'remark'         => $r['Remark'] ?? '',
+                    'image'          => $r['Image'] ?? ''
                 ];
             }
             // Extract unique values for filter dropdowns

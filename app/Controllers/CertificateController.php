@@ -765,8 +765,26 @@ class CertificateController extends BaseController
                         }
                     }
 
+                    // Lookup ITGK Name from Master sheet using ITGK Code
+                    $itgkNameMaster = '';
+                    try {
+                        $itgkMasterId    = $sheetService->getItgkMasterSheetId();
+                        $itgkMasterRange = $sheetService->getItgkMasterRange();
+                        $itgkMasterData  = $sheetService->fetchParsedSheet($itgkMasterId, $itgkMasterRange);
+                        $itgkMasterRows  = $itgkMasterData['rows'] ?? [];
+                        foreach ($itgkMasterRows as $ir) {
+                            $code = trim((string)($ir['ITGK-CODE'] ?? $ir['ITGK CODE'] ?? $ir['ITGK_CODE'] ?? ''));
+                            if (strcasecmp($code, trim($sanitized['itgk_code'])) === 0) {
+                                $itgkNameMaster = trim((string)($ir['ITGK Name'] ?? $ir['ITGK NAME'] ?? ''));
+                                break;
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        Logger::warn('Failed to fetch ITGK Name for Student_Result append', ['error' => $e->getMessage()]);
+                    }
+
                     // Build blank learner rows with common parent fields pre-filled:
-                    // Column A (S. No.), Column B (Receiving Date), Column C (ITGK Code), Course Name, Exam Name, etc.
+                    // Column A (S. No.), Column B (Receiving Date), Column C (ITGK Code), Course Name, Exam Name, ITGK NAME, etc.
                     $learnerRows = [];
                     for ($i = 0; $i < $passCount; $i++) {
                         $nextSrSNo = $lastSrSerial + $i + 1;
@@ -779,6 +797,8 @@ class CertificateController extends BaseController
                                 $learnerRow[] = $sanitized['receiving_date'];
                             } elseif (in_array($colLower, ['itgk code', 'itgk_code', 'itgk code'])) {
                                 $learnerRow[] = $sanitized['itgk_code'];
+                            } elseif (in_array($colLower, ['itgk name', 'itgk_name'])) {
+                                $learnerRow[] = $itgkNameMaster;
                             } elseif ($colLower === 'course name') {
                                 $learnerRow[] = $sanitized['course_name'];
                             } elseif (in_array($colLower, ['exam name', 'exam_name on certificate', 'exam'])) {
