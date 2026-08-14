@@ -64,7 +64,7 @@ class CertificateController extends BaseController
                     'receiving_date'       => $r['DATE']         ?? $r['Receiving Date'] ?? '',
                     'exam_name'            => $r['EXAM']         ?? $r['Exam Name']       ?? '',
                     'exam_date'            => $r['EXAM_DATE_ITGK'] ?? $r['Exam Date']    ?? '',
-                    'itgk_code'            => $r['ITGK CODE']   ?? $r['ITGK Code']       ?? '',
+                    'itgk_code'            => $r['ITGK CODE']   ?? $r['ITGK Code']       ?? $r['ITGK_CODE'] ?? $r['ITGK-CODE'] ?? '',
                     'district'             => $r['DISTRICT']    ?? $r['District']         ?? '',
                     'absent'               => (int)($r['ABSENT']      ?? $r['Absent']     ?? 0),
                     'fail'                 => (int)($r['FAIL']        ?? $r['Fail']       ?? 0),
