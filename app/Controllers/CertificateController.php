@@ -665,14 +665,53 @@ class CertificateController extends BaseController
             $sheetId      = $sheetService->getCertificateSheetId();
             $tab          = $sheetService->getCertificateTab();
 
+            // Fetch existing Certificate sheet data to compute auto-incremental Serial Number (Column A)
+            $certData     = $sheetService->fetchParsedSheet($sheetId, $sheetService->getCertificateRange());
+            $existingRows = $certData['rows'] ?? [];
+            $lastSerialNum = 0;
+            foreach ($existingRows as $exR) {
+                $rawSNo = trim((string)($exR['S. No.'] ?? $exR['S No.'] ?? $exR['S.No.'] ?? ''));
+                if (preg_match('/(\d+)/', $rawSNo, $m)) {
+                    $num = (int)$m[1];
+                    if ($num > $lastSerialNum) {
+                        $lastSerialNum = $num;
+                    }
+                }
+            }
+            $nextSerialNum = $lastSerialNum + 1;
+            $colASerial = 'Certificate ' . $nextSerialNum;
+
+            // Format Exam Date string for Column D: e.g. (17-05-2026) or (YYYY-MM-DD)
+            $rawExamDate = trim((string)($sanitized['exam_date'] ?? ''));
+            $formattedExamDate = '';
+            if (!empty($rawExamDate)) {
+                $ts = strtotime($rawExamDate);
+                $formattedExamDate = $ts ? date('d-m-Y', $ts) : $rawExamDate;
+            }
+
+            // Column D: EXAM = {{Exam Name (Exam Date)}} e.g. "MAY 2026 (17-05-2026)" or "RS-CIT Exam (17-05-2026)"
+            $examNameRaw = trim((string)($sanitized['exam_name'] ?? ''));
+            if ($formattedExamDate !== '') {
+                // If exam_name already contains parentheses date, avoid duplicating, otherwise format cleanly
+                if (!str_contains($examNameRaw, '('.$formattedExamDate.')')) {
+                    $colDExam = $examNameRaw . ' (' . $formattedExamDate . ')';
+                } else {
+                    $colDExam = $examNameRaw;
+                }
+            } else {
+                $colDExam = $examNameRaw;
+            }
+
+            // Column E: EXAM_DATE_ITGK = {{Column D Value + ITGK CODE}} e.g. "MAY 2026 (17-05-2026)45290330"
+            $colEExamItgk = $colDExam . $sanitized['itgk_code'];
+
             // Build row matching Certificate sheet column order (A–V, 22 cols)
-            // sanitizeCertificateData() returns snake_case keys — map to column order here
             $row = [
-                '',                                  // A: S. No. (auto / leave blank)
+                $colASerial,                         // A: S. No. (auto-incremental: Certificate XXXX)
                 $sanitized['course_name'],           // B: Course Name
                 $sanitized['receiving_date'],        // C: DATE
-                $sanitized['exam_name'],             // D: EXAM
-                $sanitized['exam_date'],             // E: EXAM_DATE_ITGK
+                $colDExam,                           // D: EXAM (Exam Name + (Exam Date))
+                $colEExamItgk,                       // E: EXAM_DATE_ITGK (Column D + ITGK CODE)
                 $sanitized['itgk_code'],             // F: ITGK CODE
                 $sanitized['district'],              // G: DISTRICT
                 $sanitized['absent'],                // H: ABSENT
@@ -696,6 +735,7 @@ class CertificateController extends BaseController
             $sheetService->appendRow($sheetId, $tab, [$row]);
 
             Logger::info('Certificate packet appended to Google Sheet', [
+                'serial_no' => $colASerial,
                 'itgk_code' => $sanitized['itgk_code'],
                 'user_id'   => AuthService::id(),
             ]);
@@ -709,25 +749,41 @@ class CertificateController extends BaseController
                     $srSheetId = $sheetService->getStudentResultSheetId();
                     $srTab     = $sheetService->getStudentResultTab();
 
-                    // Fetch headers to understand current Student_Result column layout
+                    // Fetch headers and rows to compute auto-increment S. No. for Student_Result (Column A)
                     $srData    = $sheetService->fetchParsedSheet($srSheetId, $sheetService->getStudentResultRange());
                     $srHeaders = $srData['headers'] ?? [];
+                    $srRowsEx  = $srData['rows'] ?? [];
 
-                    // Build a blank row with only the linkable fields pre-filled
-                    // Columns: ITGK Code, Course Name, Exam Name, Learner Code, Learner Name,
-                    //          District, Result, Exam Held Date, Packet No, Status
+                    $lastSrSerial = 0;
+                    foreach ($srRowsEx as $srR) {
+                        $rawSrSNo = trim((string)($srR['S No.'] ?? $srR['S. No.'] ?? $srR['S.No.'] ?? ''));
+                        if (preg_match('/(\d+)/', $rawSrSNo, $m)) {
+                            $n = (int)$m[1];
+                            if ($n > $lastSrSerial) {
+                                $lastSrSerial = $n;
+                            }
+                        }
+                    }
+
+                    // Build blank learner rows with common parent fields pre-filled:
+                    // Column A (S. No.), Column B (Receiving Date), Column C (ITGK Code), Course Name, Exam Name, etc.
                     $learnerRows = [];
                     for ($i = 0; $i < $passCount; $i++) {
+                        $nextSrSNo = $lastSrSerial + $i + 1;
                         $learnerRow = [];
                         foreach ($srHeaders as $col) {
                             $colLower = strtolower(trim($col));
-                            if (in_array($colLower, ['itgk code', 'itgk_code'])) {
+                            if (in_array($colLower, ['s. no.', 's no.', 's.no.', 's_no', 's. no', 'id'])) {
+                                $learnerRow[] = $nextSrSNo;
+                            } elseif (in_array($colLower, ['receiving date', 'receiving_date', 'date'])) {
+                                $learnerRow[] = $sanitized['receiving_date'];
+                            } elseif (in_array($colLower, ['itgk code', 'itgk_code', 'itgk code'])) {
                                 $learnerRow[] = $sanitized['itgk_code'];
                             } elseif ($colLower === 'course name') {
                                 $learnerRow[] = $sanitized['course_name'];
-                            } elseif (in_array($colLower, ['exam name', 'exam_name on certificate', 'batch'])) {
-                                $learnerRow[] = $sanitized['exam_name'];
-                            } elseif (in_array($colLower, ['exam date', 'exam_date', 'exam held date', 'exam_held_date', 'date'])) {
+                            } elseif (in_array($colLower, ['exam name', 'exam_name on certificate', 'batch', 'exam'])) {
+                                $learnerRow[] = $colDExam;
+                            } elseif (in_array($colLower, ['exam date', 'exam_date', 'exam held date', 'exam_held_date'])) {
                                 $learnerRow[] = $sanitized['exam_date'];
                             } elseif (in_array($colLower, ['district'])) {
                                 $learnerRow[] = $sanitized['district'];
@@ -738,7 +794,7 @@ class CertificateController extends BaseController
                             } elseif (in_array($colLower, ['status'])) {
                                 $learnerRow[] = 'Available';
                             } else {
-                                $learnerRow[] = ''; // blank for remaining columns
+                                $learnerRow[] = ''; // blank for remaining learner columns
                             }
                         }
                         $learnerRows[] = $learnerRow;
