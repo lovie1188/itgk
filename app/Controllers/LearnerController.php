@@ -63,22 +63,22 @@ class LearnerController extends BaseController
 
             foreach ($rawRows as $idx => $r) {
                 $allLearners[] = [
-                    'id' => $idx + 1,
-                    's_no' => $r['S No.'] ?? $r['S. No.'] ?? ($idx + 1),
-                    'receiving_date' => $r['Receiving Date'] ?? $r['DATE'] ?? '',
-                    'itgk_code' => trim((string)($r['ITGK Code'] ?? $r['ITGK CODE'] ?? $r['ITGK_CODE'] ?? '')),
-                    'learner_code' => $r['Learner Code'] ?? '',
-                    'learner_name' => $r['Learner Name'] ?? $r['Name'] ?? '',
-                    'father_name' => $r['FATHER NAME'] ?? $r['Father Name'] ?? '',
-                    'total_marks' => (int)($r['Total Marks'] ?? 100),
+                    'id'             => $idx + 1,
+                    's_no'           => $r['S No.'] ?? ($idx + 1),
+                    'receiving_date' => $r['Receiving Date'] ?? '',
+                    'itgk_code'      => trim((string)($r['ITGK Code'] ?? '')),
+                    'learner_code'   => $r['Learner Code'] ?? '',
+                    'learner_name'   => $r['Learner Name'] ?? '',
+                    'father_name'    => $r['FATHER NAME'] ?? '',
+                    'total_marks'    => (int)($r['Total Marks'] ?? 100),
                     'marks_obtained' => (int)($r['Marks Obtained'] ?? 0),
-                    'percentage' => (float)($r['Percentage'] ?? 0),
-                    'result' => $r['Result'] ?? 'PASS',
-                    'certificate_no' => $r['Certificate Number'] ?? $r['Certificate No'] ?? '',
-                    'course_name' => $r['Course Name'] ?? '',
-                    'exam_name' => $r['Exam Name'] ?? $r['exam_name on certificate'] ?? $r['BATCH'] ?? '',
-                    'status' => $r['Status'] ?? $r['STATUS'] ?? $r['status'] ?? 'Available',
-                    'remark' => $r['Remark'] ?? ''
+                    'percentage'     => (float)($r['Percentage'] ?? 0),
+                    'result'         => $r['Result'] ?? 'PASS',
+                    'certificate_no' => $r['Certificate Number'] ?? '',
+                    'course_name'    => $r['Course Name'] ?? '',
+                    'exam_name'      => $r['Exam Name'] ?? '',
+                    'status'         => $r['STATUS'] ?? 'Available',
+                    'remark'         => $r['Remark'] ?? ''
                 ];
             }
             // Extract unique values for filter dropdowns
