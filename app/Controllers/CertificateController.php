@@ -393,25 +393,26 @@ class CertificateController extends BaseController
                 return;
             }
 
-            // â”€â”€ 1. Build Certificate sheet batchUpdate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ── 1. Build Certificate sheet batchUpdate ──────────────────
             $certUpdates = [];
             foreach ($validSelections as $valid) {
                 $existing = $valid['existing'];
 
-                // Pad to 22 columns (Aâ€“V)
-                while (count($existing) < 22) $existing[] = '';
+                // Pad to 23 columns (A–W)
+                while (count($existing) < 23) $existing[] = '';
 
                 // Update only status + receiver + issuer columns
-                $existing[16] = 'ISSUED';                              // Q â€” STATUS
-                $existing[17] = $remark;                               // R â€” Remark
-                $existing[18] = $receiverName;                         // S â€” Receiver Name
-                $existing[19] = $receiverDesig;                        // T â€” Receiver Designation
-                $existing[20] = $receiverMob;                          // U â€” Receiver Mobile
+                $existing[16] = 'ISSUED';                              // Q — STATUS
+                $existing[17] = $remark;                               // R — Remark
+                $existing[18] = $receiverName;                         // S — Receiver Name
+                $existing[19] = $receiverDesig;                        // T — Receiver Designation
+                $existing[20] = $receiverMob;                          // U — Receiver Mobile
                 $existing[21] = "Issued by: {$issuerName} ({$issuerDesig}) on {$issueDate}"; // V
+                // Index 22 (W) — Image link preserved as is
 
                 $certUpdates[] = [
-                    'range'  => "{$certTab}!A" . $valid['sheet_row'] . ":V" . $valid['sheet_row'],
-                    'values' => [$existing],
+                    'range'  => "{$certTab}!A" . $valid['sheet_row'] . ":W" . $valid['sheet_row'],
+                    'values' => [array_values($existing)],
                 ];
             }
 
@@ -431,7 +432,7 @@ class CertificateController extends BaseController
             // Detect Status column index in Student_Result sheet
             $statusColIdx = null;
             foreach ($srHeaders as $ci => $hdr) {
-                if (strcasecmp(trim($hdr), 'Status') === 0) {
+                if (strcasecmp(trim($hdr), 'Status') === 0 || strcasecmp(trim($hdr), 'STATUS') === 0) {
                     $statusColIdx = $ci;
                     break;
                 }
@@ -447,8 +448,9 @@ class CertificateController extends BaseController
                 
                 if ($itgk !== '') {
                     $selectionKeys["$itgk|||$course|||$exam"] = true;
-                    $selectionKeys["$itgk|||$course"] = true; // Fallback match by ITGK + Course
-                    $selectionKeys["$itgk"] = true; // Fallback match by ITGK alone
+                    if ($course !== '') {
+                        $selectionKeys["$itgk|||$course"] = true;
+                    }
                 }
                 
                 if (preg_match('/\((\d{2}-\d{2}-\d{4})\)/', $exam, $m)) {
@@ -459,9 +461,9 @@ class CertificateController extends BaseController
 
             $learnerUpdates = [];
             foreach ($srRows as $rowOffset => $r) {
-                $itgk   = strtolower(trim((string)($r['ITGK Code']   ?? $r['ITGK CODE'] ?? $r['ITGK_CODE'] ?? '')));
+                $itgk   = strtolower(trim((string)($r['ITGK Code']   ?? '')));
                 $course = strtolower(trim((string)($r['Course Name']  ?? '')));
-                $exam   = strtolower(trim((string)($r['Exam Name']    ?? $r['exam_name on certificate'] ?? $r['BATCH'] ?? '')));
+                $exam   = strtolower(trim((string)($r['Exam Name']    ?? '')));
                 $heldDate = str_replace('-', '/', strtolower(trim((string)($r['exam_held_date'] ?? ''))));
                 
                 $matchFound = false;
@@ -470,8 +472,6 @@ class CertificateController extends BaseController
                 } elseif ($heldDate !== '' && isset($selectionKeys["$itgk|||$course|||$heldDate"])) {
                     $matchFound = true;
                 } elseif (isset($selectionKeys["$itgk|||$course"])) {
-                    $matchFound = true;
-                } elseif (isset($selectionKeys["$itgk"])) {
                     $matchFound = true;
                 }
 
