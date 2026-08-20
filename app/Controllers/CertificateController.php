@@ -1224,9 +1224,6 @@ class CertificateController extends BaseController
                 
                 if ($itgk !== '') {
                     $selKeys["$itgk|||$course|||$exam"] = true;
-                    if ($course !== '') {
-                        $selKeys["$itgk|||$course"] = true;
-                    }
                 }
                 
                 if (preg_match('/\((\d{2}-\d{2}-\d{4})\)/', $exam, $m)) {
@@ -1254,8 +1251,6 @@ class CertificateController extends BaseController
                 if (isset($selKeys["$itgk|||$course|||$exam"])) {
                     $matchFound = true;
                 } elseif ($heldDate !== '' && isset($selKeys["$itgk|||$course|||$heldDate"])) {
-                    $matchFound = true;
-                } elseif (isset($selKeys["$itgk|||$course"])) {
                     $matchFound = true;
                 }
 
