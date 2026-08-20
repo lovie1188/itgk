@@ -213,7 +213,6 @@ class CertificateController extends BaseController
                 'course_name'          => 1,   // B - Course Name
                 'receiving_date'       => 2,   // C - DATE
                 'exam_name'            => 3,   // D - EXAM
-                'exam_date'            => 4,   // E - EXAM_DATE_ITGK
                 'itgk_code'            => 5,   // F - ITGK CODE
                 'district'             => 6,   // G - DISTRICT
                 'absent'               => 7,   // H - ABSENT
@@ -244,6 +243,38 @@ class CertificateController extends BaseController
                         $modified = true;
                     }
                 }
+            }
+
+            // Recalculate Column D (EXAM) and Column E (EXAM_DATE_ITGK) dynamically if changed or missing formula
+            $rawExamName = trim((string)($_POST['exam_name'] ?? $rowValues[3]));
+            $rawExamDate = trim((string)($_POST['exam_date'] ?? ''));
+            $itgkCode    = trim((string)($_POST['itgk_code'] ?? $rowValues[5]));
+
+            $formattedExamDate = '';
+            if (!empty($rawExamDate)) {
+                $ts = strtotime($rawExamDate);
+                $formattedExamDate = $ts ? date('d-m-Y', $ts) : $rawExamDate;
+            }
+
+            if ($formattedExamDate !== '') {
+                if (!str_contains($rawExamName, '(' . $formattedExamDate . ')')) {
+                    $colDExam = $rawExamName . ' (' . $formattedExamDate . ')';
+                } else {
+                    $colDExam = $rawExamName;
+                }
+            } else {
+                $colDExam = $rawExamName;
+            }
+
+            $colEExamItgk = $colDExam . $itgkCode;
+
+            if ($rowValues[3] !== $colDExam) {
+                $rowValues[3] = $colDExam;
+                $modified = true;
+            }
+            if ($rowValues[4] !== $colEExamItgk) {
+                $rowValues[4] = $colEExamItgk;
+                $modified = true;
             }
 
             if (!$modified) {
@@ -407,7 +438,7 @@ class CertificateController extends BaseController
                 $existing[18] = $receiverName;                         // S — Receiver Name
                 $existing[19] = $receiverDesig;                        // T — Receiver Designation
                 $existing[20] = $receiverMob;                          // U — Receiver Mobile
-                $existing[21] = "Issued by: {$issuerName} ({$issuerDesig}) on {$issueDate}"; // V
+                $existing[21] = $issuerName;                           // V — Issued By (Logged-in User Full Name)
                 // Index 22 (W) — Image link preserved as is
 
                 $certUpdates[] = [
@@ -1158,7 +1189,7 @@ class CertificateController extends BaseController
                 if ($idxS !== false) $updateRow[$idxS]  = $receiverName;
                 if ($idxT !== false) $updateRow[$idxT]  = $receiverDesig;
                 if ($idxU !== false) $updateRow[$idxU]  = $receiverMob;
-                if ($idxV !== false) $updateRow[$idxV]  = "Issued by: {$issuerName} ({$issuerDesig}) | Office: {$issuerOfficeName} | Mob: {$issuerMobile} | on {$issueDate}";
+                if ($idxV !== false) $updateRow[$idxV]  = $issuerName;
 
                 // Update District (Section 1), Packet No, Cert From, Cert To (Section 2) if passed from offcanvas
                 $selDistrict = trim((string)($sel['district'] ?? ''));
