@@ -702,7 +702,7 @@ $verifyUrl = (getenv('APP_URL') ?: 'http://localhost/certificate') . '/verify/tr
             <div class="status-card">
                 <div class="status-card-icon"><i class="fas fa-file-invoice"></i></div>
                 <div class="status-card-info">
-                    <span class="status-card-label">Transaction ID</span>
+                    <span class="status-card-label">Dispatch Txn ID</span>
                     <span class="status-card-val"><?= htmlspecialchars($txnId) ?></span>
                 </div>
             </div>
@@ -733,6 +733,26 @@ $verifyUrl = (getenv('APP_URL') ?: 'http://localhost/certificate') . '/verify/tr
                     <span class="status-card-label">Issued From</span>
                     <span class="status-card-val"><?= htmlspecialchars($issuerFrom ?: $issuerRole) ?></span>
                 </div>
+            </div>
+        </div>
+
+        <!-- Monetization / Advertisement Slot (Top Banner Ad - Google Adsense / Meta / Admob) -->
+        <div class="ad-slot-container no-print px-3 py-2 my-2 text-center bg-light border rounded-2" style="background:#fafafa; border:1px dashed #cbd5e1 !important;">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="badge bg-secondary" style="font-size:8.5px; opacity:0.8;">ADVERTISEMENT</span>
+                <small class="text-muted" style="font-size:9px;">Sponsored Content</small>
+            </div>
+            <!-- Google AdSense / Meta Ad Placement Placeholder -->
+            <div id="ad-banner-top" class="my-1 py-2 text-muted" style="min-height:50px; display:flex; align-items:center; justify-content:center; background:#ffffff; border:1px solid #e2e8f0; border-radius:4px;">
+                <!-- Paste Google AdSense <script> or Meta / Admob Ad Unit Code Here -->
+                <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
+                <ins class="adsbygoogle"
+                     style="display:block; width:100%; height:50px;"
+                     data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+                     data-ad-slot="1234567890"
+                     data-ad-format="horizontal"
+                     data-full-width-responsive="true"></ins>
+                <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
             </div>
         </div>
 
@@ -813,25 +833,30 @@ $verifyUrl = (getenv('APP_URL') ?: 'http://localhost/certificate') . '/verify/tr
             </div>
         </div>
 
-        <!-- Certificate details Table -->
+        <!-- Certificate details Table (Child Rows of Issue Transaction) -->
         <div class="ent-table-container">
             <div
                 style="font-weight: 700; font-size: 12px; text-transform: uppercase; color: #1e3a8a; margin-bottom: 8px;">
-                Certificate Details</div>
+                Certificate Issue Packet Details (Total <?= count($certs) ?> Packet Row<?= count($certs) > 1 ? 's' : '' ?>)</div>
             <table class="ent-table">
                 <thead>
                     <tr>
                         <th>Course / Exam Name</th>
-                        <th style="text-align: center;">Pass</th>
+                        <th style="text-align: center;">Pass Count</th>
                         <th style="text-align: center;">Packet No</th>
                         <th>Cert No. From</th>
                         <th>Cert No. To</th>
                         <th style="text-align: center;">Status</th>
-                        <th>Remark</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($certs as $c): ?>
+                    <?php 
+                    $combinedRemarks = [];
+                    foreach ($certs as $c): 
+                        if (!empty($c['remark']) && !in_array($c['remark'], $combinedRemarks, true)) {
+                            $combinedRemarks[] = $c['remark'];
+                        }
+                    ?>
                         <tr>
                             <td>
                                 <strong><?= htmlspecialchars((string) ($c['course_name'] ?? '-')) ?></strong>
@@ -843,16 +868,42 @@ $verifyUrl = (getenv('APP_URL') ?: 'http://localhost/certificate') . '/verify/tr
                             <td><?= htmlspecialchars((string) ($c['cert_no_from'] ?? '-')) ?></td>
                             <td><?= htmlspecialchars((string) ($c['cert_no_to'] ?? '-')) ?></td>
                             <td class="ctr" style="color: #10b981; font-weight: 700;">Issued</td>
-                            <td><small class="text-muted"><?= htmlspecialchars((string) ($c['remark'] ?? '-')) ?></small></td>
                         </tr>
                     <?php endforeach; ?>
                     <tr class="ent-table-total">
-                        <td style="text-align: right; font-weight: 800;">TOTAL</td>
+                        <td style="text-align: right; font-weight: 800;">TOTAL CERTIFICATES ISSUED</td>
                         <td class="ctr"><?= $totalPass ?></td>
-                        <td colspan="5"></td>
+                        <td colspan="4"></td>
                     </tr>
                 </tbody>
             </table>
+
+            <!-- Unified Bottom Remark Box -->
+            <div class="mt-2 p-2 bg-light border rounded-2" style="background:#f8fafc; border:1px solid #e2e8f0;">
+                <div class="fw-bold text-dark" style="font-size:11px;"><i class="fas fa-comment-alt text-primary me-1.5"></i>Transaction / Packet Remark:</div>
+                <div class="text-secondary" style="font-size:11px; margin-top:2px;">
+                    <?= !empty($combinedRemarks) ? htmlspecialchars(implode(' | ', $combinedRemarks)) : 'No specific remark recorded for this issuance.' ?>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Monetization / Ad Unit Placement (Google Adsense / Admob / Meta) -->
+        <div class="ad-slot-container no-print px-3 py-2 my-2 text-center bg-light border rounded-2" style="background:#fafafa; border:1px dashed #cbd5e1 !important;">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="badge bg-secondary" style="font-size:8.5px; opacity:0.8;">SPONSORED ADVERTISEMENT</span>
+                <small class="text-muted" style="font-size:9px;">Adsense / Meta Ads Monetization</small>
+            </div>
+            <div id="ad-banner-bottom" class="my-1 py-2 text-muted" style="min-height:90px; display:flex; align-items:center; justify-content:center; background:#ffffff; border:1px solid #e2e8f0; border-radius:4px;">
+                <!-- Google AdSense Responsive Display Ad Unit -->
+                <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
+                <ins class="adsbygoogle"
+                     style="display:block; width:100%; height:90px;"
+                     data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+                     data-ad-slot="0987654321"
+                     data-ad-format="auto"
+                     data-full-width-responsive="true"></ins>
+                <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+            </div>
         </div>
 
         <!-- Generated Info Metadata row -->
@@ -948,7 +999,6 @@ $verifyUrl = (getenv('APP_URL') ?: 'http://localhost/certificate') . '/verify/tr
                         <th>Cert No. From</th>
                         <th>Cert No. To</th>
                         <th style="text-align: center;">Status</th>
-                        <th>Remark</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -964,7 +1014,6 @@ $verifyUrl = (getenv('APP_URL') ?: 'http://localhost/certificate') . '/verify/tr
                             <td><?= htmlspecialchars((string) ($c['cert_no_from'] ?? '-')) ?></td>
                             <td><?= htmlspecialchars((string) ($c['cert_no_to'] ?? '-')) ?></td>
                             <td class="ctr">Issued</td>
-                            <td><?= htmlspecialchars((string) ($c['remark'] ?? '-')) ?></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -972,10 +1021,15 @@ $verifyUrl = (getenv('APP_URL') ?: 'http://localhost/certificate') . '/verify/tr
                     <tr>
                         <td style="text-align:right">TOTAL</td>
                         <td class="ctr"><?= $totalPass ?></td>
-                        <td class="ctr" colspan="5"></td>
+                        <td class="ctr" colspan="4"></td>
                     </tr>
                 </tfoot>
             </table>
+
+            <!-- Unified Bottom Remark for Print Slip -->
+            <div style="margin-top:8px; padding:6px; border:1px solid #ccc; font-size:11px;">
+                <strong>Remark:</strong> <?= !empty($combinedRemarks) ? htmlspecialchars(implode(' | ', $combinedRemarks)) : 'N/A' ?>
+            </div>
 
             <!-- Issuer Block -->
             <div class="issuer-block">
