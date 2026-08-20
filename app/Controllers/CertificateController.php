@@ -1173,7 +1173,7 @@ class CertificateController extends BaseController
                 $range    = "{$certTab}!{$startCol}{$sheetRow}:{$endCol}{$sheetRow}";
                 $certUpdates[] = [
                     'range'  => $range,
-                    'values' => [$updateRow],
+                    'values' => [array_values($updateRow)],
                 ];
                 $certsUpdated++;
                 // Track S.No for acknowledgement page
