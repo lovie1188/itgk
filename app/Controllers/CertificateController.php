@@ -202,53 +202,56 @@ class CertificateController extends BaseController
             // all other columns remain exactly as they were received from the sheet.
             $existing = $sheetService->fetchRawRow($sheetId, $range);
 
-            // Pad to 23 columns
-            while (count($existing) < 23) {
-                $existing[] = '';
+            // Build updated row array preserving existing values (0-indexed 0=A to 22=W)
+            $rowValues = [];
+            for ($i = 0; $i < 23; $i++) {
+                $rowValues[$i] = trim((string)($existing[$i] ?? ''));
             }
 
             // Column map: POST key → 0-indexed column position
             $columnMap = [
-                'course_name'     => 1,   // B - Course Name
-                'receiving_date'  => 2,   // C - DATE
-                'exam_name'       => 3,   // D - EXAM
-                'exam_date'       => 4,   // E - EXAM_DATE_ITGK
-                'itgk_code'       => 5,   // F - ITGK CODE
-                'district'        => 6,   // G - DISTRICT
-                'absent'          => 7,   // H - ABSENT
-                'fail'            => 8,   // I - FAIL
-                'pass'            => 9,   // J - PASS
-                'ufm'             => 10,  // K - UFM
-                'grand_total'     => 11,  // L - Grand Total
-                'packet_no'       => 12,  // M - Packet No.
-                'cert_no_from'    => 13,  // N - Cert No. From
-                'cert_no_to'      => 14,  // O - Cert No. To
-                'current_location' => 15,  // P - Current Location
-                'status'          => 16,  // Q - STATUS
-                'remark'          => 17,  // R - Remark
-                'receiver_name'   => 18,  // S - Receiver Name
-                'receiver_designation' => 19, // T - Receiver Designation
-                'receiver_mobile' => 20,  // U - Receiver Mobile Number
-                'issued_by'       => 21,  // V - Issued By
-                'image'           => 22,  // W - Image
+                'course_name'          => 1,   // B - Course Name
+                'receiving_date'       => 2,   // C - DATE
+                'exam_name'            => 3,   // D - EXAM
+                'exam_date'            => 4,   // E - EXAM_DATE_ITGK
+                'itgk_code'            => 5,   // F - ITGK CODE
+                'district'             => 6,   // G - DISTRICT
+                'absent'               => 7,   // H - ABSENT
+                'fail'                 => 8,   // I - FAIL
+                'pass'                 => 9,   // J - PASS
+                'ufm'                  => 10,  // K - UFM
+                'grand_total'          => 11,  // L - Grand Total
+                'packet_no'            => 12,  // M - Packet No.
+                'cert_no_from'         => 13,  // N - Cert No. From
+                'cert_no_to'           => 14,  // O - Cert No. To
+                'current_location'     => 15,  // P - Current Location
+                'status'               => 16,  // Q - STATUS
+                'remark'               => 17,  // R - Remark
+                'receiver_name'        => 18,  // S - Receiver Name
+                'receiver_designation' => 19,  // T - Receiver Designation
+                'receiver_mobile'      => 20,  // U - Receiver Mobile Number
+                'issued_by'            => 21,  // V - Issued By
+                'image'                => 22,  // W - Image
             ];
 
             $modified = false;
             foreach ($columnMap as $postKey => $colIdx) {
-                $newVal  = trim((string)($_POST[$postKey] ?? ''));
-                $oldVal  = trim((string)($existing[$colIdx] ?? ''));
-                if ($newVal !== $oldVal) {
-                    $existing[$colIdx] = $newVal;
-                    $modified = true;
+                if (isset($_POST[$postKey])) {
+                    $newVal = trim((string)$_POST[$postKey]);
+                    $oldVal = $rowValues[$colIdx];
+                    if ($newVal !== $oldVal) {
+                        $rowValues[$colIdx] = $newVal;
+                        $modified = true;
+                    }
                 }
             }
 
             if (!$modified) {
-                $this->json(['success' => true, 'message' => 'No changes detected â€” record unchanged.']);
+                $this->json(['success' => true, 'message' => 'No changes detected — record unchanged.']);
                 return;
             }
 
-            $sheetService->updateSheetRow($sheetId, $range, array_values($existing));
+            $sheetService->updateSheetRow($sheetId, $range, $rowValues);
 
             Logger::info('Certificate row updated in Google Sheet', [
                 'sheet_row' => $sheetRow
