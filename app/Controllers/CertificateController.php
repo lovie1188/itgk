@@ -2126,34 +2126,21 @@ class CertificateController extends BaseController
 HTML;
 
             $emailService = new \App\Services\EmailService();
-            $queuedCount = 0;
+            $sentCount = 0;
 
             foreach ($recipients as $email) {
-                if ($emailService->enqueue($email, $subject, $emailBody, true)) {
-                    $queuedCount++;
+                if ($emailService->sendDirect($email, $subject, $emailBody, true)) {
+                    $sentCount++;
                 }
             }
 
-            // Trigger non-blocking background queue runner HTTP request
-            $appUrl = rtrim(getenv('APP_URL') ?: 'http://localhost/certificate', '/');
-            $cronUrl = $appUrl . '/cron/process-email-queue';
-            
-            $ch = curl_init($cronUrl);
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT_MS => 500, // Non-blocking: wait only 500ms max
-                CURLOPT_SSL_VERIFYPEER => false,
-            ]);
-            @curl_exec($ch);
-            @curl_close($ch);
-
             echo json_encode([
                 'success' => true, 
-                'message' => "Acknowledgement email queued for {$queuedCount} stakeholder(s) and sending in background!"
+                'message' => "Acknowledgement email sent successfully to {$sentCount} stakeholder(s)!"
             ]);
         } catch (\Exception $e) {
             http_response_code(500);
-            echo json_encode(['success' => false, 'message' => 'Failed to queue email: ' . $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => 'Failed to send email: ' . $e->getMessage()]);
         }
     }
     
