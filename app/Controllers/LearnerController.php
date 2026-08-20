@@ -262,6 +262,17 @@ class LearnerController extends BaseController
         $data = $this->sanitizeLearnerData($_POST);
 
         try {
+            // Handle Google Drive file upload for Column W (Image) if file attached
+            if (!empty($_FILES['image']['tmp_name']) && is_uploaded_file($_FILES['image']['tmp_name'])) {
+                $existingLearner = $this->learnerModel->find($id);
+                $examName = $existingLearner['Exam Name'] ?? $_POST['exam_name'] ?? 'General_Exams';
+                $itgkCode = $existingLearner['ITGK Code'] ?? $_POST['itgk_code'] ?? 'General_ITGK';
+
+                $driveService = new \App\Services\GoogleDriveService();
+                $driveLink = $driveService->uploadStructuredFile($_FILES['image'], (string)$examName, (string)$itgkCode);
+                $data['Image'] = $driveLink;
+            }
+
             $this->learnerModel->update($id, $data);
 
             Logger::info('Learner updated', [
@@ -269,7 +280,7 @@ class LearnerController extends BaseController
                 'user_id' => $this->getCurrentUser()['id'] ?? null
             ]);
 
-            $this->json(['success' => true, 'message' => 'Learner updated successfully']);
+            $this->json(['success' => true, 'message' => 'Learner updated successfully', 'image_url' => $data['Image'] ?? null]);
         } catch (\Exception $e) {
             Logger::error('Failed to update learner', ['error' => $e->getMessage(), 'id' => $id]);
             $this->json(['success' => false, 'message' => $e->getMessage()], 500);

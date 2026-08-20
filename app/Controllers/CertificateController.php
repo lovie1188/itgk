@@ -1215,14 +1215,15 @@ class CertificateController extends BaseController
                 $sheetRow = (int)($sel['sheet_row'] ?? 0);
                 if ($sheetRow <= 0 || !isset($certByRow[$sheetRow])) continue;
                 $row = $certByRow[$sheetRow];
-                $itgk   = strtolower(trim((string)($row['ITGK CODE'] ?? $row['ITGK Code'] ?? '')));
+                $itgk   = strtolower(trim((string)($row['ITGK CODE'] ?? '')));
                 $course = strtolower(trim((string)($row['Course Name'] ?? '')));
-                $exam   = strtolower(trim((string)($row['EXAM'] ?? $row['Exam Name'] ?? '')));
+                $exam   = strtolower(trim((string)($row['EXAM'] ?? '')));
                 
                 if ($itgk !== '') {
                     $selKeys["$itgk|||$course|||$exam"] = true;
-                    $selKeys["$itgk|||$course"] = true;
-                    $selKeys["$itgk"] = true;
+                    if ($course !== '') {
+                        $selKeys["$itgk|||$course"] = true;
+                    }
                 }
                 
                 if (preg_match('/\((\d{2}-\d{2}-\d{4})\)/', $exam, $m)) {
@@ -1233,7 +1234,7 @@ class CertificateController extends BaseController
 
             $statusColIdx = null;
             foreach ($srHeaders as $ci => $hdr) {
-                if (strcasecmp(trim($hdr), 'Status') === 0) {
+                if (strcasecmp(trim($hdr), 'STATUS') === 0 || strcasecmp(trim($hdr), 'Status') === 0) {
                     $statusColIdx = $ci;
                     break;
                 }
@@ -1241,9 +1242,9 @@ class CertificateController extends BaseController
 
             $learnerUpdates = [];
             foreach ($srRows as $rowOffset => $r) {
-                $itgk   = strtolower(trim((string)($r['ITGK Code']   ?? $r['ITGK CODE'] ?? $r['ITGK_CODE'] ?? '')));
+                $itgk   = strtolower(trim((string)($r['ITGK Code']   ?? '')));
                 $course = strtolower(trim((string)($r['Course Name']  ?? '')));
-                $exam   = strtolower(trim((string)($r['Exam Name']    ?? $r['exam_name on certificate'] ?? $r['BATCH'] ?? '')));
+                $exam   = strtolower(trim((string)($r['Exam Name']    ?? '')));
                 $heldDate = str_replace('-', '/', strtolower(trim((string)($r['exam_held_date'] ?? ''))));
                 
                 $matchFound = false;
@@ -1252,8 +1253,6 @@ class CertificateController extends BaseController
                 } elseif ($heldDate !== '' && isset($selKeys["$itgk|||$course|||$heldDate"])) {
                     $matchFound = true;
                 } elseif (isset($selKeys["$itgk|||$course"])) {
-                    $matchFound = true;
-                } elseif (isset($selKeys["$itgk"])) {
                     $matchFound = true;
                 }
 
