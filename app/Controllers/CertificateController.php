@@ -1169,7 +1169,7 @@ class CertificateController extends BaseController
                     $updateRow[$ci] = $row[$h] ?? '';
                 }
 
-                $idxQ = $idxR = $idxS = $idxT = $idxU = $idxV = $idxG = $idxM = $idxN = $idxO = false;
+                $idxQ = $idxR = $idxS = $idxT = $idxU = $idxV = $idxW = $idxG = $idxM = $idxN = $idxO = false;
                 foreach ($certHeaders as $ci => $h) {
                     $hNorm = strtolower(trim((string)$h));
                     if ($hNorm === 'status') $idxQ = $ci;
@@ -1177,7 +1177,8 @@ class CertificateController extends BaseController
                     elseif ($hNorm === 'receiver name') $idxS = $ci;
                     elseif ($hNorm === 'receiver designation') $idxT = $ci;
                     elseif ($hNorm === 'receiver mobile number' || $hNorm === 'receiver mobile') $idxU = $ci;
-                    elseif ($hNorm === 'image') $idxV = $ci;
+                    elseif ($hNorm === 'issued by' || $hNorm === 'issued_by') $idxV = $ci;
+                    elseif ($hNorm === 'image') $idxW = $ci;
                     elseif ($hNorm === 'district') $idxG = $ci;
                     elseif ($hNorm === 'packet no.' || $hNorm === 'packet no' || $hNorm === 'packet_no') $idxM = $ci;
                     elseif (str_contains($hNorm, 'certificate no. from') || str_contains($hNorm, 'cert_no_from')) $idxN = $ci;
