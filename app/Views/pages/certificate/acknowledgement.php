@@ -736,24 +736,24 @@ $verifyUrl = (getenv('APP_URL') ?: 'http://localhost/certificate') . '/verify/tr
             </div>
         </div>
 
-        <!-- Monetization / Advertisement Slot (Top Banner Ad - Google Adsense / Meta / Admob) -->
-        <div class="ad-slot-container no-print px-3 py-2 my-2 text-center bg-light border rounded-2" style="background:#fafafa; border:1px dashed #cbd5e1 !important;">
-            <div class="d-flex justify-content-between align-items-center mb-1">
-                <span class="badge bg-secondary" style="font-size:8.5px; opacity:0.8;">ADVERTISEMENT</span>
-                <small class="text-muted" style="font-size:9px;">Sponsored Content</small>
-            </div>
-            <!-- Google AdSense / Meta Ad Placement Placeholder -->
-            <div id="ad-banner-top" class="my-1 py-2 text-muted" style="min-height:50px; display:flex; align-items:center; justify-content:center; background:#ffffff; border:1px solid #e2e8f0; border-radius:4px;">
-                <!-- Paste Google AdSense <script> or Meta / Admob Ad Unit Code Here -->
-                <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
-                <ins class="adsbygoogle"
-                     style="display:block; width:100%; height:50px;"
-                     data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
-                     data-ad-slot="1234567890"
-                     data-ad-format="horizontal"
-                     data-full-width-responsive="true"></ins>
-                <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-            </div>
+        <!-- Monetization / Advertisement Slot (Top Banner Ad) -->
+        <div class="ad-slot-container no-print text-center my-1" style="display:none;" id="ad-slot-top-wrapper">
+            <ins class="adsbygoogle"
+                 style="display:block; text-align:center;"
+                 data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+                 data-ad-slot="1234567890"
+                 data-ad-format="auto"
+                 data-full-width-responsive="true"></ins>
+            <script>
+                (adsbygoogle = window.adsbygoogle || []).push({});
+                // Show container only if AdSense fills the ad slot
+                document.addEventListener('DOMContentLoaded', function() {
+                    var ins = document.querySelector('#ad-slot-top-wrapper ins');
+                    if (ins && (ins.getAttribute('data-ad-status') === 'filled' || ins.children.length > 0)) {
+                        document.getElementById('ad-slot-top-wrapper').style.display = 'block';
+                    }
+                });
+            </script>
         </div>
 
         <!-- Content Block -->
@@ -885,25 +885,25 @@ $verifyUrl = (getenv('APP_URL') ?: 'http://localhost/certificate') . '/verify/tr
                     <?= !empty($combinedRemarks) ? htmlspecialchars(implode(' | ', $combinedRemarks)) : 'No specific remark recorded for this issuance.' ?>
                 </div>
             </div>
+            
+        <!-- Bottom Monetization / Advertisement Slot -->
+        <div class="ad-slot-container no-print text-center my-1" style="display:none;" id="ad-slot-bottom-wrapper">
+            <ins class="adsbygoogle"
+                 style="display:block; text-align:center;"
+                 data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+                 data-ad-slot="0987654321"
+                 data-ad-format="auto"
+                 data-full-width-responsive="true"></ins>
+            <script>
+                (adsbygoogle = window.adsbygoogle || []).push({});
+                document.addEventListener('DOMContentLoaded', function() {
+                    var ins = document.querySelector('#ad-slot-bottom-wrapper ins');
+                    if (ins && (ins.getAttribute('data-ad-status') === 'filled' || ins.children.length > 0)) {
+                        document.getElementById('ad-slot-bottom-wrapper').style.display = 'block';
+                    }
+                });
+            </script>
         </div>
-
-        <!-- Bottom Monetization / Ad Unit Placement (Google Adsense / Admob / Meta) -->
-        <div class="ad-slot-container no-print px-3 py-2 my-2 text-center bg-light border rounded-2" style="background:#fafafa; border:1px dashed #cbd5e1 !important;">
-            <div class="d-flex justify-content-between align-items-center mb-1">
-                <span class="badge bg-secondary" style="font-size:8.5px; opacity:0.8;">SPONSORED ADVERTISEMENT</span>
-                <small class="text-muted" style="font-size:9px;">Adsense / Meta Ads Monetization</small>
-            </div>
-            <div id="ad-banner-bottom" class="my-1 py-2 text-muted" style="min-height:90px; display:flex; align-items:center; justify-content:center; background:#ffffff; border:1px solid #e2e8f0; border-radius:4px;">
-                <!-- Google AdSense Responsive Display Ad Unit -->
-                <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
-                <ins class="adsbygoogle"
-                     style="display:block; width:100%; height:90px;"
-                     data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
-                     data-ad-slot="0987654321"
-                     data-ad-format="auto"
-                     data-full-width-responsive="true"></ins>
-                <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-            </div>
         </div>
 
         <!-- Generated Info Metadata row -->
