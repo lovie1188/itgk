@@ -81,6 +81,13 @@ certificate/
 
 ---
 
+## 📌 Pending Tasks & Future Setup Reference
+
+*   **Ad Network Monetization Setup**: The frontend containers for AdSense, Meta Ads, and AdMob have been integrated dynamically into the Certificate Acknowledgement page ([`acknowledgement.php`](file:///D:/xampp/htdocs/certificate/app/Views/pages/certificate/acknowledgement.php)). They remain hidden (`display:none;`) until ads are filled. For publisher ID configuration and activation steps upon domain approval, refer to the detailed guide:
+    👉 [`ad_monetization_setup.md`](file:///D:/xampp/htdocs/certificate/ad_monetization_setup.md)
+
+---
+
 ## 🤝 Contributing
 
 1. Fork the repository.
