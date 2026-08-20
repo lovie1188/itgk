@@ -248,7 +248,7 @@ class CertificateController extends BaseController
                 return;
             }
 
-            $sheetService->updateSheetRow($sheetId, $range, $existing);
+            $sheetService->updateSheetRow($sheetId, $range, array_values($existing));
 
             Logger::info('Certificate row updated in Google Sheet', [
                 'sheet_row' => $sheetRow
